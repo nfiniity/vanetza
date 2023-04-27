@@ -7,6 +7,7 @@
 #include <vanetza/units/length.hpp>
 #include <boost/variant/variant.hpp>
 #include <list>
+#include <array>
 
 namespace vanetza
 {

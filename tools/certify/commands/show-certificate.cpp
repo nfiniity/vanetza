@@ -225,6 +225,7 @@ int ShowCertificateCommand::execute()
         if (restriction_type == ValidityRestrictionType::Region) {
             certificate_region_constraints = true;
 
+            using GeographicRegion = vanetza::security::GeographicRegion;
             GeographicRegion region = boost::get<GeographicRegion>(validity_restriction);
 
             std::cout << "This certificate is regionally restricted by ";

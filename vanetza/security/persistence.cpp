@@ -49,28 +49,28 @@ ecdsa256::KeyPair load_private_key_from_file_v3(const std::string& key_path)
     std::ifstream t(key_path);
     std::string RSA_PRIV_KEY((std::istreambuf_iterator<char>(t)),
                  std::istreambuf_iterator<char>());
-    
+
 
     size_t pos1, pos2;
     pos1 = RSA_PRIV_KEY.find(HEADER);
     if(pos1 == std::string::npos)
         throw "PEM header not found";
-        
+
     pos2 = RSA_PRIV_KEY.find(FOOTER, pos1+1);
     if(pos2 == std::string::npos)
         throw "PEM footer not found";
-        
+
     // Start position and length
     pos1 = pos1 + HEADER.length();
     pos2 = pos2 - pos1;
     std::string keystr = RSA_PRIV_KEY.substr(pos1, pos2);
 
-    // Base64 decode, place in a ByteQueue    
+    // Base64 decode, place in a ByteQueue
     CryptoPP::ByteQueue queue;
     CryptoPP::Base64Decoder decoder;
 
     decoder.Attach(new CryptoPP::Redirector(queue));
-    decoder.Put((const byte*)keystr.data(), keystr.length());
+    decoder.Put((const CryptoPP::byte*)keystr.data(), keystr.length());
     decoder.MessageEnd();
 
 
