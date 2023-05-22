@@ -36,8 +36,11 @@ VANETZA_REGISTER_CRYPTO_BACKEND(BackendNull)
     VANETZA_REGISTER_CRYPTO_BACKEND(BackendCryptoPP)
 #endif
 
+// TODO: split this up
 #ifdef VANETZA_WITH_OPENSSL
 #   include <vanetza/security/backend_openssl.hpp>
+#   include <vanetza/security/backend_openssl_hsm.hpp>
+    VANETZA_REGISTER_CRYPTO_BACKEND(BackendOpenSslHsm)
     VANETZA_REGISTER_CRYPTO_BACKEND(BackendOpenSsl)
 #endif
 

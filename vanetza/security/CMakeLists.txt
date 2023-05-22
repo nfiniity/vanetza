@@ -50,7 +50,8 @@ endif()
 
 if(TARGET OpenSSL::Crypto)
     set_property(TARGET security APPEND PROPERTY
-        SOURCES backend_openssl.cpp openssl_wrapper.cpp)
+    # TODO: split this up
+        SOURCES backend_openssl.cpp backend_openssl_hsm.cpp openssl_wrapper.cpp)
     target_link_libraries(security PRIVATE OpenSSL::Crypto)
     target_compile_definitions(security PUBLIC "VANETZA_WITH_OPENSSL")
     if ("${OPENSSL_VERSION}" VERSION_EQUAL 2.0.0)
