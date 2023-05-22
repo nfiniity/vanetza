@@ -10,6 +10,7 @@ add_vanetza_component(security
     ecc_point.cpp
     ecdsa256.cpp
     encryption_parameter.cpp
+    encrypt_service.cpp
     header_field.cpp
     int_x.cpp
     length_coding.cpp

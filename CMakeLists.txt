@@ -13,7 +13,7 @@ if(POLICY CMP0077)
 endif()
 
 # Vanetza makes extensive use of C++11
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Load conan configuration if available
