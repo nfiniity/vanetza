@@ -25,7 +25,7 @@ TEST(Encryption, CcmEncryption)
     EXPECT_EQ(encrypted_data_tag.size(), 12);
 }
 
-TEST(ENCRYPTION, EncryptService)
+TEST(Encryption, EncryptService)
 {
     BackendOpenSsl backend;
     ecdsa256::PublicKey public_key;

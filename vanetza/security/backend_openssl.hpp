@@ -14,6 +14,7 @@ namespace security
 namespace openssl
 {
 class Key;
+class EvpKey;
 } // namespace openssl
 
 
@@ -52,6 +53,9 @@ private:
 
     /// convert to internal format of public key
     openssl::Key internal_public_key(const ecdsa256::PublicKey&) const;
+
+    // calculate shared secret from ECDH key exchange
+    std::array<uint8_t, 32> ecdh_secret(openssl::EvpKey &private_key, openssl::EvpKey &public_key) const;
 };
 
 } // namespace security

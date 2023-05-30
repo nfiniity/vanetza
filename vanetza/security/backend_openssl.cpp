@@ -95,6 +95,7 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const st
     openssl::EvpKey ephemeral_key(curve_name);
 
     // Derive shared secret from ephemeral private key and public key
+    std::array<uint8_t, 32> shared_secret(ecdh_secret(ephemeral_key, recipient_key));
 
     // Derive encryption and signing keys for AES key encryption from shared secret with SHA-256 (concatenate counter 4 octets)
 
@@ -267,6 +268,22 @@ int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<ui
     EVP_CIPHER_CTX_free(ctx);
 
     return ciphertext_len;
+}
+
+std::array<uint8_t, 32> BackendOpenSsl::ecdh_secret(openssl::EvpKey &private_key, openssl::EvpKey &public_key) const
+{
+    std::array<uint8_t, 32> result;
+    size_t len;
+
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_pkey(nullptr, private_key, nullptr);
+    openssl::check(ctx != nullptr &&
+                   1 == EVP_PKEY_derive_init(ctx) &&
+                   1 == EVP_PKEY_derive_set_peer(ctx, public_key) &&
+                   1 == EVP_PKEY_derive(ctx, result.data(), &len));
+
+    EVP_PKEY_CTX_free(ctx);
+
+    return result;
 }
 
 } // namespace security
