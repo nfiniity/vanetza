@@ -2,10 +2,12 @@
 #define OPENSSL_WRAPPER_HPP_GUFJGICT
 
 #include <vanetza/common/byte_buffer.hpp>
+#include <vanetza/security/ecdsa256.hpp>
 #include <boost/core/noncopyable.hpp>
 #include <openssl/bn.h>
 #include <openssl/ecdsa.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <array>
 #include <cstdint>
 #include <stdexcept>
@@ -138,6 +140,26 @@ public:
 
 private:
     EC_KEY* eckey;
+};
+
+class EvpKey
+{
+public:
+    EvpKey();
+    explicit EvpKey(const std::string &curve_name);
+    explicit EvpKey(const ecdsa256::PublicKey &key, const std::string &curve_name);
+    // non-copyable
+    EvpKey(const EvpKey&) = delete;
+    EvpKey& operator=(const EvpKey&) = delete;
+    // but movable
+    EvpKey(EvpKey&&);
+    EvpKey& operator=(EvpKey&&);
+    ~EvpKey();
+
+    operator EVP_PKEY*() { return evpKey; }
+
+private:
+    EVP_PKEY* evpKey;
 };
 
 } // namespace openssl
