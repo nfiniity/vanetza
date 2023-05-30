@@ -8,6 +8,7 @@
 #include <openssl/obj_mac.h>
 #include <openssl/sha.h>
 #include <openssl/rand.h>
+#include <openssl/evp.h>
 #include <cassert>
 
 namespace vanetza
@@ -63,7 +64,7 @@ EcdsaSignature BackendOpenSsl::sign_data(const ecdsa256::PrivateKey& key, const 
     return ecdsa_signature;
 }
 
-ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const ByteBuffer& data) const
+ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const std::string& curve_name, const ByteBuffer& data) const
 {
     /*
         NOTE: It is important that the nonce of CCM should be carefully chosen to never be used more than once for a given key.
@@ -74,16 +75,12 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const By
     // Generate random symmetric key for AES-CCM
     std::array<uint8_t, 16> aes_key;
 
-    if (RAND_bytes(aes_key.data(), aes_key.size()) != 1) {
-        throw openssl::Exception();
-    }
+    openssl::check(1 == RAND_bytes(aes_key.data(), aes_key.size()));
 
     // Generate random nonce for AES-CCM
     std::array<uint8_t, 12> aes_nonce;
 
-    if (RAND_bytes(aes_nonce.data(), aes_nonce.size()) != 1) {
-        throw openssl::Exception();
-    }
+    openssl::check(1 == RAND_bytes(aes_nonce.data(), aes_nonce.size()));
 
     // Encrypt data with AES-CCM
     ByteBuffer encrypted_data;
@@ -91,9 +88,11 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const By
 
     ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
 
-    // Encrypt symmetric key with ECIES
+    // Convert recipient public key to OpenSSL EVP_PKEY
+    openssl::EvpKey recipient_key(key, curve_name);
 
     // Generate ephemeral key pair for ECIES
+    openssl::EvpKey ephemeral_key(curve_name);
 
     // Derive shared secret from ephemeral private key and public key
 
@@ -104,6 +103,8 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const By
     // Calculate HMAC on encrypted AES key using ECIES signing key
 
     // Store AES key (and nonce?) for response decryption
+
+    // Cleanup
 
     return data; // TODO
 }
@@ -256,6 +257,7 @@ int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<ui
      */
     openssl::check(1 == EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len));
     ciphertext_len += len;
+    assert(len == 0);
 
     /* Get the tag */
     tag.resize(12);
