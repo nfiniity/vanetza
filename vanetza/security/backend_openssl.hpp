@@ -30,11 +30,18 @@ public:
     /// \see Backend::sign_data
     EcdsaSignature sign_data(const ecdsa256::PrivateKey& private_key, const ByteBuffer& data_buffer) override;
 
+    ByteBuffer encrypt_data(const ecdsa256::PublicKey& public_key, const ByteBuffer& data) const;
+
     /// \see Backend::verify_data
     bool verify_data(const ecdsa256::PublicKey& public_key, const ByteBuffer& data, const EcdsaSignature& sig) override;
 
     /// \see Backend::decompress_point
     boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point) override;
+
+    int ccm_encrypt(const ByteBuffer& plaintext,
+                    const std::array<uint8_t, 16>& key,
+                    const std::array<uint8_t, 12>& iv,
+                    ByteBuffer& ciphertext, ByteBuffer& tag) const;
 
 private:
     /// calculate SHA256 digest of data buffer

@@ -7,6 +7,7 @@
 #include <openssl/ecdsa.h>
 #include <openssl/obj_mac.h>
 #include <openssl/sha.h>
+#include <openssl/rand.h>
 #include <cassert>
 
 namespace vanetza
@@ -60,6 +61,51 @@ EcdsaSignature BackendOpenSsl::sign_data(const ecdsa256::PrivateKey& key, const 
 
     ecdsa_signature.R = std::move(coordinate);
     return ecdsa_signature;
+}
+
+ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const ByteBuffer& data) const
+{
+    /*
+        NOTE: It is important that the nonce of CCM should be carefully chosen to never be used more than once for a given key.
+              To avoid timing attacks, the output of decryption should be given after performing all the computations
+              even if it outputs failed.
+    */
+
+    // Generate random symmetric key for AES-CCM
+    std::array<uint8_t, 16> aes_key;
+
+    if (RAND_bytes(aes_key.data(), aes_key.size()) != 1) {
+        throw openssl::Exception();
+    }
+
+    // Generate random nonce for AES-CCM
+    std::array<uint8_t, 12> aes_nonce;
+
+    if (RAND_bytes(aes_nonce.data(), aes_nonce.size()) != 1) {
+        throw openssl::Exception();
+    }
+
+    // Encrypt data with AES-CCM
+    ByteBuffer encrypted_data;
+    ByteBuffer encrypted_data_tag;
+
+    ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
+
+    // Encrypt symmetric key with ECIES
+
+    // Generate ephemeral key pair for ECIES
+
+    // Derive shared secret from ephemeral private key and public key
+
+    // Derive encryption and signing keys for AES key encryption from shared secret with SHA-256 (concatenate counter 4 octets)
+
+    // Encrypt AES key with XOR using ECIES encryption key
+
+    // Calculate HMAC on encrypted AES key using ECIES signing key
+
+    // Store AES key (and nonce?) for response decryption
+
+    return data; // TODO
 }
 
 bool BackendOpenSsl::verify_data(const ecdsa256::PublicKey& key, const ByteBuffer& data, const EcdsaSignature& sig)
@@ -173,6 +219,52 @@ openssl::Key BackendOpenSsl::internal_public_key(const ecdsa256::PublicKey& gene
 
     openssl::check(EC_KEY_check_key(key));
     return key;
+}
+
+int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<uint8_t, 16> &key,
+                                const std::array<uint8_t, 12> &iv, ByteBuffer &ciphertext, ByteBuffer &tag) const
+{
+    int len;
+
+    int ciphertext_len;
+
+    /* Create and initialise the context */
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    openssl::check(ctx != nullptr);
+
+    /* Initialise the encryption operation. */
+    openssl::check(1 == EVP_EncryptInit_ex2(ctx, EVP_aes_128_ccm(), nullptr, nullptr, nullptr));
+
+    /* Set IV length */
+    openssl::check(1 == EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_IVLEN, 12, nullptr));
+
+    /* Initialise key and IV */
+    openssl::check(1 == EVP_EncryptInit_ex2(ctx, nullptr, key.data(), iv.data(), nullptr));
+
+    /*
+     * Provide the message to be encrypted, and obtain the encrypted output.
+     * EVP_EncryptUpdate can only be called once for this.
+     */
+    ciphertext.resize(plaintext.size());
+
+    openssl::check(1 == EVP_EncryptUpdate(ctx, ciphertext.data(), &len, plaintext.data(), static_cast<int>(plaintext.size())));
+    ciphertext_len = len;
+
+    /*
+     * Finalise the encryption. Normally ciphertext bytes may be written at
+     * this stage, but this does not occur in CCM mode.
+     */
+    openssl::check(1 == EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len));
+    ciphertext_len += len;
+
+    /* Get the tag */
+    tag.resize(12);
+    openssl::check(1 == EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_GET_TAG, 12, tag.data()));
+
+    /* Clean up */
+    EVP_CIPHER_CTX_free(ctx);
+
+    return ciphertext_len;
 }
 
 } // namespace security
