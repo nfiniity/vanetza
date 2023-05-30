@@ -9,6 +9,7 @@
 #include <openssl/sha.h>
 #include <openssl/rand.h>
 #include <openssl/evp.h>
+#include <openssl/param_build.h>
 #include <cassert>
 
 namespace vanetza
@@ -234,14 +235,17 @@ int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<ui
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     openssl::check(ctx != nullptr);
 
+    // Set IV length to 12 bytes
+    OSSL_PARAM_BLD *cipher_param_bld = OSSL_PARAM_BLD_new();
+    openssl::check(cipher_param_bld &&
+                   1 == OSSL_PARAM_BLD_push_uint(cipher_param_bld, "ivlen", 12));
+    OSSL_PARAM *cipher_params = OSSL_PARAM_BLD_to_param(cipher_param_bld);
+    openssl::check(cipher_params);
+
     /* Initialise the encryption operation. */
-    openssl::check(1 == EVP_EncryptInit_ex2(ctx, EVP_aes_128_ccm(), nullptr, nullptr, nullptr));
-
-    /* Set IV length */
-    openssl::check(1 == EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_SET_IVLEN, 12, nullptr));
-
-    /* Initialise key and IV */
-    openssl::check(1 == EVP_EncryptInit_ex2(ctx, nullptr, key.data(), iv.data(), nullptr));
+    EVP_CIPHER *cipher = EVP_CIPHER_fetch(nullptr, "AES-128-CCM", nullptr);
+    openssl::check(cipher != nullptr &&
+                   1 == EVP_EncryptInit_ex2(ctx, cipher, key.data(), iv.data(), cipher_params));
 
     /*
      * Provide the message to be encrypted, and obtain the encrypted output.
@@ -262,10 +266,16 @@ int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<ui
 
     /* Get the tag */
     tag.resize(12);
-    openssl::check(1 == EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_CCM_GET_TAG, 12, tag.data()));
+    std::array<OSSL_PARAM, 2> tag_params;
+    tag_params[0] = OSSL_PARAM_construct_octet_string("tag", tag.data(), 12);
+    tag_params[1] = OSSL_PARAM_construct_end();
+    openssl::check(1 == EVP_CIPHER_CTX_get_params(ctx, tag_params.data()));
 
     /* Clean up */
     EVP_CIPHER_CTX_free(ctx);
+    EVP_CIPHER_free(cipher);
+    OSSL_PARAM_free(cipher_params);
+    OSSL_PARAM_BLD_free(cipher_param_bld);
 
     return ciphertext_len;
 }
@@ -281,6 +291,7 @@ std::array<uint8_t, 32> BackendOpenSsl::ecdh_secret(openssl::EvpKey &private_key
                    1 == EVP_PKEY_derive_set_peer(ctx, public_key) &&
                    1 == EVP_PKEY_derive(ctx, result.data(), &len));
 
+    assert(len == result.size());
     EVP_PKEY_CTX_free(ctx);
 
     return result;
