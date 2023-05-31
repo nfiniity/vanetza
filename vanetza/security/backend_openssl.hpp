@@ -66,6 +66,9 @@ private:
     template <std::size_t N>
     std::array<uint8_t, N> xor_encrypt_decrypt(const std::array<uint8_t, N> &key,
                                                const std::array<uint8_t, N> &input) const;
+
+    // HMAC with SHA256
+    std::array<uint8_t, 32> hmac_sha256(const ByteBuffer &key, const ByteBuffer &data) const;
 };
 
 } // namespace security

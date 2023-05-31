@@ -10,6 +10,7 @@
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <openssl/param_build.h>
+#include <openssl/hmac.h>
 #include <cassert>
 
 namespace vanetza
@@ -107,6 +108,9 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const st
     std::array<uint8_t, 16> encrypted_aes_key(xor_encrypt_decrypt(ecies_encryption_key, aes_key));
 
     // Calculate HMAC on encrypted AES key using ECIES signing key
+    ByteBuffer ecies_mac_key_bb(ecies_mac_key.begin(), ecies_mac_key.end());
+    ByteBuffer encrypted_aes_key_bb(encrypted_aes_key.begin(), encrypted_aes_key.end());
+    std::array<uint8_t, 32> encrypted_aes_key_hmac(hmac_sha256(ecies_mac_key_bb, encrypted_aes_key_bb));
 
     // Store AES key (and nonce?) for response decryption
 
@@ -330,6 +334,21 @@ std::array<uint8_t, N> BackendOpenSsl::xor_encrypt_decrypt(const std::array<uint
         output[i] = key[i] ^ data[i];
     }
     return output;
+}
+
+std::array<uint8_t, 32> BackendOpenSsl::hmac_sha256(const ByteBuffer &key,
+                                                    const ByteBuffer &data) const
+{
+    EVP_MD *digest = EVP_MD_fetch(nullptr, "SHA256", nullptr);
+
+    std::array<uint8_t, 32> result;
+    unsigned int hmac_len;
+    openssl::check(HMAC(digest, key.data(), key.size(), data.data(), data.size(),
+                        result.data(), &hmac_len) != nullptr);
+    assert(hmac_len == result.size());
+
+    EVP_MD_free(digest);
+    return result;
 }
 
 } // namespace security
