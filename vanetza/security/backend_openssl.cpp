@@ -85,7 +85,7 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const st
 
     // Encrypt data with AES-CCM
     ByteBuffer encrypted_data;
-    ByteBuffer encrypted_data_tag;
+    std::array<uint8_t, 12> encrypted_data_tag;
 
     ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
 
@@ -229,7 +229,7 @@ openssl::Key BackendOpenSsl::internal_public_key(const ecdsa256::PublicKey& gene
 }
 
 int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<uint8_t, 16> &key,
-                                const std::array<uint8_t, 12> &iv, ByteBuffer &ciphertext, ByteBuffer &tag) const
+                                const std::array<uint8_t, 12> &iv, ByteBuffer &ciphertext, std::array<uint8_t, 12> &tag) const
 {
     int len;
 
@@ -269,7 +269,6 @@ int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<ui
     assert(len == 0);
 
     /* Get the tag */
-    tag.resize(12);
     std::array<OSSL_PARAM, 2> tag_params;
     tag_params[0] = OSSL_PARAM_construct_octet_string("tag", tag.data(), 12);
     tag_params[1] = OSSL_PARAM_construct_end();

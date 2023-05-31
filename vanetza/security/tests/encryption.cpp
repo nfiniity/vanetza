@@ -17,12 +17,11 @@ TEST(Encryption, CcmEncryption)
 
 
     vanetza::ByteBuffer encrypted_data;
-    vanetza::ByteBuffer encrypted_data_tag;
+    std::array<uint8_t, 12> encrypted_data_tag;
 
     backend.ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
 
     EXPECT_EQ(encrypted_data.size(), data.size());
-    EXPECT_EQ(encrypted_data_tag.size(), 12);
 }
 
 TEST(Encryption, EncryptService)

@@ -42,7 +42,7 @@ public:
     int ccm_encrypt(const ByteBuffer& plaintext,
                     const std::array<uint8_t, 16>& key,
                     const std::array<uint8_t, 12>& iv,
-                    ByteBuffer& ciphertext, ByteBuffer& tag) const;
+                    ByteBuffer& ciphertext, std::array<uint8_t, 12>& tag) const;
 
 private:
     /// calculate SHA256 digest of data buffer
