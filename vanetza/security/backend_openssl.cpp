@@ -99,8 +99,12 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const st
     std::array<uint8_t, 32> shared_secret(ecdh_secret(ephemeral_key, recipient_key));
 
     // Derive encryption and signing keys for AES key encryption from shared secret with SHA-256 (concatenate counter 4 octets)
+    std::array<uint8_t, 16> ecies_encryption_key;
+    std::array<uint8_t, 32> ecies_mac_key;
+    ecies_keys(shared_secret, ecies_encryption_key, ecies_mac_key);
 
     // Encrypt AES key with XOR using ECIES encryption key
+    std::array<uint8_t, 16> encrypted_aes_key(xor_encrypt_decrypt(ecies_encryption_key, aes_key));
 
     // Calculate HMAC on encrypted AES key using ECIES signing key
 
@@ -295,6 +299,38 @@ std::array<uint8_t, 32> BackendOpenSsl::ecdh_secret(openssl::EvpKey &private_key
     EVP_PKEY_CTX_free(ctx);
 
     return result;
+}
+
+void BackendOpenSsl::ecies_keys(const std::array<uint8_t, 32> &shared_secret,
+                   std::array<uint8_t, 16> &encryption_key,
+                   std::array<uint8_t, 32> &mac_key) const
+{
+    // Input for encryption_key is shared secret and 0x000001
+    std::array<uint8_t, 36> input;
+    std::copy(shared_secret.begin(), shared_secret.end(), input.begin());
+    input[32] = 0x00;
+    input[33] = 0x00;
+    input[34] = 0x00;
+    input[35] = 0x01;
+
+    std::array<uint8_t, 32> encryption_digest;
+    openssl::check(SHA256(input.data(), input.size(), encryption_digest.data()) != nullptr);
+    std::copy(encryption_digest.begin(), encryption_digest.begin() + encryption_key.size(), encryption_key.begin());
+
+    // Input for mac_key is shared secret and 0x000002
+    input[35] = 0x02;
+    openssl::check(SHA256(input.data(), input.size(), mac_key.data()) != nullptr);
+}
+
+template <std::size_t N>
+std::array<uint8_t, N> BackendOpenSsl::xor_encrypt_decrypt(const std::array<uint8_t, N> &key,
+                                                           const std::array<uint8_t, N> &data) const
+{
+    std::array<uint8_t, N> output;
+    for (std::size_t i = 0; i < N; ++i) {
+        output[i] = key[i] ^ data[i];
+    }
+    return output;
 }
 
 } // namespace security

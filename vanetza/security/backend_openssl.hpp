@@ -56,6 +56,16 @@ private:
 
     // calculate shared secret from ECDH key exchange
     std::array<uint8_t, 32> ecdh_secret(openssl::EvpKey &private_key, openssl::EvpKey &public_key) const;
+
+    // derive encryption and MAC key from shared secret
+    void ecies_keys(const std::array<uint8_t, 32> &shared_secret,
+                       std::array<uint8_t, 16> &encryption_key,
+                       std::array<uint8_t, 32> &mac_key) const;
+
+    // XOR cipher
+    template <std::size_t N>
+    std::array<uint8_t, N> xor_encrypt_decrypt(const std::array<uint8_t, N> &key,
+                                               const std::array<uint8_t, N> &input) const;
 };
 
 } // namespace security
