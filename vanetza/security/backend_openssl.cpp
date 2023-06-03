@@ -110,6 +110,8 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const st
     // Calculate HMAC on encrypted AES key using ECIES signing key
     ByteBuffer ecies_mac_key_bb(ecies_mac_key.begin(), ecies_mac_key.end());
     ByteBuffer encrypted_aes_key_bb(encrypted_aes_key.begin(), encrypted_aes_key.end());
+    // HMAC is supposed to be 16 bytes long according to ETSI TS 102 941 V1.4.1 Annex F, but OpenSSL returns 32 bytes
+    // This might be outdated because it is possible to specify which hash function was used in the Enrolment Request (TODO: verify this)
     std::array<uint8_t, 32> encrypted_aes_key_hmac(hmac_sha256(ecies_mac_key_bb, encrypted_aes_key_bb));
 
     // Store AES key (and nonce?) for response decryption
