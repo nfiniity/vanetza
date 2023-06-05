@@ -246,6 +246,7 @@ int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<ui
     openssl::check(ctx != nullptr);
 
     // Set IV length to 12 bytes
+    // TODO check if tag length is correct
     OSSL_PARAM_BLD *cipher_param_bld = OSSL_PARAM_BLD_new();
     openssl::check(cipher_param_bld &&
                    1 == OSSL_PARAM_BLD_push_uint(cipher_param_bld, "ivlen", 12));
@@ -294,6 +295,9 @@ std::array<uint8_t, 32> BackendOpenSsl::ecdh_secret(openssl::EvpKey &private_key
     std::array<uint8_t, 32> result;
     size_t len;
 
+    // TODO: check if cofactor mode is needed for ECDH
+    // ETSI 102 941 V1.4.1 Annex F example does not use cofactor mode
+    // ETSI 103 097 V1.4.1 Section 5.3 refers to IEEE 1609.2 Section 5.3.5.1 which uses cofactor mode
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_pkey(nullptr, private_key, nullptr);
     openssl::check(ctx != nullptr &&
                    1 == EVP_PKEY_derive_init(ctx) &&
