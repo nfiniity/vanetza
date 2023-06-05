@@ -11,15 +11,15 @@ namespace pki {
 
 asn1::InnerEcRequest
 build_inner_ec_request(const std::string &its_id,
-                       const std::vector<ItsAid> &psid_ssp_list,
-                       const security::openssl::EvpKey &verification_key)
+                       const security::openssl::EvpKey &verification_key,
+                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
 {
     asn1::InnerEcRequest inner_ec_request;
     inner_ec_request->certificateFormat = CertificateFormat_ts103097v131;
     OCTET_STRING_fromString(&inner_ec_request->itsId, its_id.data());
     set_public_verification_key(inner_ec_request, verification_key);
     set_certificate_subject_attributes(inner_ec_request, its_id);
-    set_psid_ssps(inner_ec_request, psid_ssp_list);
+    if (psid_ssp_list) set_psid_ssps(inner_ec_request, *psid_ssp_list);
 
     return inner_ec_request;
 }
@@ -64,14 +64,11 @@ void set_certificate_subject_attributes(asn1::InnerEcRequest& inner_ec_request, 
     OCTET_STRING_fromString(&inner_ec_request->requestedSubjectAttributes.id->choice.name, its_id.data());
 }
 
-void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const std::vector<ItsAid>& psid_ssp_list)
+void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const asn1::SequenceOfPsidSsp& psid_ssp_list)
 {
-    inner_ec_request->requestedSubjectAttributes.appPermissions = asn1::allocate<SequenceOfPsidSsp_t>();
-
-    // TODO: change ItsAid to PsidSsp_t + wrapper and implement
-    for (const auto& psid_ssp : psid_ssp_list) {
-        PsidSsp_t psid_ssp_asn1;
-    }
+    auto *psid_ssp_list_copy = static_cast<SequenceOfPsidSsp_t *>(
+        asn1::copy(asn_DEF_SequenceOfPsidSsp, &(*psid_ssp_list)));
+    inner_ec_request->requestedSubjectAttributes.appPermissions = psid_ssp_list_copy;
 }
 
 } // namespace pki
