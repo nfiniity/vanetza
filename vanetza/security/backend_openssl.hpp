@@ -31,6 +31,14 @@ public:
     /// \see Backend::sign_data
     EcdsaSignature sign_data(const ecdsa256::PrivateKey& private_key, const ByteBuffer& data_buffer) override;
 
+    /*
+     * Encrypt data using ECIES with AES-128-CCM and SHA256-HMAC
+     * as described in ETSI TS 102 941 V1.4.1 Annex F
+     * \param public_key public key of recipient
+     * \param curve_name name of curve of public key
+     * \param data data to encrypt
+     * \return encrypted data
+    */
     ByteBuffer encrypt_data(const ecdsa256::PublicKey& public_key, const std::string &curve_name, const ByteBuffer& data) const;
 
     /// \see Backend::verify_data
