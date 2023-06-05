@@ -197,6 +197,36 @@ EvpKey::~EvpKey()
     EVP_PKEY_free(evpKey);
 }
 
+std::string EvpKey::group_name() const
+{
+    std::string group_name;
+    size_t group_name_size;
+
+    // Get size of group name
+    EVP_PKEY_get_group_name(evpKey, nullptr, 0, &group_name_size);
+    group_name.resize(group_name_size);
+
+    EVP_PKEY_get_group_name(evpKey, &group_name[0], group_name_size, nullptr);
+    return group_name;
+}
+
+// Convert from OpenSSL EVP_PKEY to our public key format
+ecdsa256::PublicKey EvpKey::public_key() const
+{
+    ecdsa256::PublicKey key;
+    std::array<uint8_t, 65> out_buf;
+    size_t out_len;
+
+    check(1 == EVP_PKEY_get_octet_string_param(evpKey, "pub", out_buf.data(), out_buf.size(), &out_len) &&
+          out_len == out_buf.size() &&
+          out_buf[0] == POINT_CONVERSION_UNCOMPRESSED);
+
+    std::copy(out_buf.begin() + 1, out_buf.begin() + 33, key.x.begin());
+    std::copy(out_buf.begin() + 33, out_buf.begin() + 65, key.y.begin());
+
+    return key;
+}
+
 } // namespace openssl
 } // namespace security
 } // namespace vanetza

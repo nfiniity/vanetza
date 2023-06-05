@@ -156,9 +156,11 @@ public:
     EvpKey& operator=(EvpKey&&);
     ~EvpKey();
 
-    operator EVP_PKEY*() { return evpKey; }
+    std::string group_name() const;
+    ecdsa256::PublicKey public_key() const;
+    operator EVP_PKEY *() { return evpKey; }
 
-private:
+  private:
     EVP_PKEY* evpKey;
 };
 
