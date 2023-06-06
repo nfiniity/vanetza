@@ -1,5 +1,5 @@
-#ifndef CANONICAL_CERTIFICATE_PROVIDER_HPP_ZJ76GU3X
-#define CANONICAL_CERTIFICATE_PROVIDER_HPP_ZJ76GU3X
+#ifndef SELF_CERTIFICATE_PROVIDER_HPP_ZJ76GU3X
+#define SELF_CERTIFICATE_PROVIDER_HPP_ZJ76GU3X
 
 #include <vanetza/security/certificate_provider.hpp>
 
@@ -9,27 +9,28 @@ namespace security
 {
 
 /**
- * A certificate provider that uses a canonical key with an empty certificate chain
+ * A certificate provider that uses a key with an empty certificate chain
+ * Used in EC and AT requests
  */
-class CanonicalCertificateProvider : public CertificateProvider
+class SelfCertificateProvider : public CertificateProvider
 {
 public:
     /**
-     * Create canonical certificate provider with empty chain
+     * Create self certificate provider with empty chain
      * \param authorization_ticket
      * \param ticket_key private key of given authorization ticket
      */
-    CanonicalCertificateProvider(const ecdsa256::PrivateKey& canonical_key);
+    explicit SelfCertificateProvider(const ecdsa256::PrivateKey& canonical_key);
 
     int version() override;
     /**
-     * Get own certificate to use for signing
+     * Get certificate with issuer_identifier set to 0
      * \return own certificate
      */
     const CertificateVariant& own_certificate() override;
 
     /**
-     * Get own certificate chain, excluding the leaf certificate and root CA
+     * Get empty certificate chain
      * \return own certificate chain
      */
     std::list<CertificateVariant> own_chain() override;
@@ -49,4 +50,4 @@ private:
 } // namespace security
 } // namespace vanetza
 
-#endif /* CANONICAL_CERTIFICATE_PROVIDER_HPP_ZJ76GU3X */
+#endif /* SELF_CERTIFICATE_PROVIDER_HPP_ZJ76GU3X */

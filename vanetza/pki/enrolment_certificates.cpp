@@ -2,7 +2,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <vanetza/security/ecdsa256.hpp>
-#include <vanetza/security/canonical_certificate_provider.hpp>
+#include <vanetza/security/self_certificate_provider.hpp>
 #include <vanetza/security/sign_header_policy.hpp>
 #include <vanetza/security/sign_service.hpp>
 #include <vanetza/security/backend.hpp>
@@ -83,14 +83,14 @@ security::SecuredMessageV3
 sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
                       const security::openssl::EvpKey &verification_key)
 {
-    security::CanonicalCertificateProvider canonical_provider(verification_key.private_key());
+    security::SelfCertificateProvider vertification_key_provider(verification_key.private_key());
     std::unique_ptr<security::Backend> backend(security::create_backend("default"));
     // Position is not used for signing here, so we can use a dummy provider
     StoredPositionProvider position_provider;
     ManualRuntime runtime(Clock::at(boost::posix_time::microsec_clock::universal_time()));
     security::DefaultSignHeaderPolicy sign_header_policy(runtime, position_provider);
 
-    security::SignService sign_service(security::straight_sign_serviceV3(canonical_provider, *backend, sign_header_policy));
+    security::SignService sign_service(security::straight_sign_serviceV3(vertification_key_provider, *backend, sign_header_policy));
     security::SignRequest sign_request;
     sign_request.its_aid = aid::SCR;
 
