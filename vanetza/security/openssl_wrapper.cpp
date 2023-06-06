@@ -227,6 +227,19 @@ ecdsa256::PublicKey EvpKey::public_key() const
     return key;
 }
 
+ecdsa256::PrivateKey EvpKey::private_key() const
+{
+    ecdsa256::PrivateKey key;
+    BIGNUM *private_number = nullptr;
+
+    check(1 == EVP_PKEY_get_bn_param(evpKey, "priv", &private_number) &&
+          BN_num_bytes(private_number) == key.key.size() &&
+          BN_bn2bin(private_number, key.key.data()));
+
+    BN_clear_free(private_number);
+    return key;
+}
+
 } // namespace openssl
 } // namespace security
 } // namespace vanetza
