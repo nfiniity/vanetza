@@ -1,8 +1,16 @@
 #include <iostream>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <vanetza/security/ecdsa256.hpp>
+#include <vanetza/security/canonical_certificate_provider.hpp>
+#include <vanetza/security/sign_header_policy.hpp>
+#include <vanetza/security/sign_service.hpp>
+#include <vanetza/security/backend.hpp>
 #include <vanetza/pki/enrolment_certificates.hpp>
 #include <vanetza/common/its_aid.hpp>
+#include <vanetza/common/stored_position_provider.hpp>
+#include <vanetza/common/manual_runtime.hpp>
+#include <vanetza/net/packet.hpp>
 
 
 namespace vanetza {
@@ -69,6 +77,29 @@ void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const asn1::SequenceO
     auto *psid_ssp_list_copy = static_cast<SequenceOfPsidSsp_t *>(
         asn1::copy(asn_DEF_SequenceOfPsidSsp, &(*psid_ssp_list)));
     inner_ec_request->requestedSubjectAttributes.appPermissions = psid_ssp_list_copy;
+}
+
+security::SecuredMessageV3
+sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
+                      const security::openssl::EvpKey &verification_key)
+{
+    security::CanonicalCertificateProvider canonical_provider(verification_key.private_key());
+    std::unique_ptr<security::Backend> backend(security::create_backend("default"));
+    // Position is not used for signing here, so we can use a dummy provider
+    StoredPositionProvider position_provider;
+    ManualRuntime runtime(Clock::at(boost::posix_time::microsec_clock::universal_time()));
+    security::DefaultSignHeaderPolicy sign_header_policy(runtime, position_provider);
+
+    security::SignService sign_service(security::straight_sign_serviceV3(canonical_provider, *backend, sign_header_policy));
+    security::SignRequest sign_request;
+    sign_request.its_aid = aid::SCR;
+
+    DownPacket packet;
+    packet.layer(OsiLayer::Application) = std::move(inner_ec_request);
+    sign_request.plain_message = std::move(packet);
+
+    security::SignConfirm sign_confirm = sign_service(std::move(sign_request));
+    return boost::get<security::SecuredMessageV3>(sign_confirm.secured_message);
 }
 
 } // namespace pki
