@@ -2,9 +2,10 @@
 #include <vanetza/pki/enrolment_certificates.hpp>
 #include <vanetza/common/its_aid.hpp>
 
-TEST(EnrolmentCertificates, BuildInnerEcRequest)
+TEST(EnrolmentCertificates, BuildEnrolmentRequest)
 {
     std::string its_id("my_canonical_id");
+    vanetza::security::openssl::EvpKey canonical_key("prime256v1");
     vanetza::security::openssl::EvpKey verification_key("prime256v1");
 
     // PSID/SSP for CA
@@ -32,9 +33,8 @@ TEST(EnrolmentCertificates, BuildInnerEcRequest)
     ASN_SEQUENCE_ADD(&psid_ssp_list->list, vanetza::asn1::copy(asn_DEF_PsidSsp, &(*gn_mgmt_psid_ssp)));
 
     // Build InnerEcRequest
-    vanetza::asn1::InnerEcRequest inner_ec_request(
-        vanetza::pki::build_inner_ec_request(its_id, verification_key, psid_ssp_list));
+    vanetza::security::SecuredMessageV3 enrolment_request(
+        vanetza::pki::build_enrolment_request(its_id, verification_key, canonical_key, psid_ssp_list));
 
-    ASSERT_TRUE(inner_ec_request.validate());
-    xer_fprint(stdout, &asn_DEF_InnerEcRequest, &(*inner_ec_request));
+    ASSERT_TRUE(enrolment_request.is_signed_message());
 }

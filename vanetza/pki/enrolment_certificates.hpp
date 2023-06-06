@@ -6,17 +6,32 @@
 #include <vanetza/asn1/psid_ssp.hpp>
 #include <vanetza/security/openssl_wrapper.hpp>
 #include <vanetza/security/secured_message.hpp>
+#include <vanetza/security/certificate_provider.hpp>
 
 namespace vanetza {
 
 namespace pki {
 
 /*
- * Build an InnerEcRequest
+ * Build an Enrolment Certificate Request
  * \param its_id canonical id for initial enrolment or HashedId8 of current EC for re-enrolment
  * \param verification_key new EC public key
+ * \param active_certificate_provider certificate provider for current EC
  * \param psid_ssp_list list of PSID/SSP pairs
 */
+security::SecuredMessageV3
+build_enrolment_request(const std::string &its_id,
+                       const security::openssl::EvpKey &verification_key,
+                       security::CertificateProvider& active_certificate_provider,
+                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
+
+// Overload for initial enrolment with canonical key
+security::SecuredMessageV3
+build_enrolment_request(const std::string &its_id,
+                       const security::openssl::EvpKey &verification_key,
+                       const security::openssl::EvpKey &canonical_key,
+                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
+
 asn1::InnerEcRequest
 build_inner_ec_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
@@ -27,6 +42,10 @@ void set_public_verification_key(asn1::InnerEcRequest& inner_ec_request, const s
 void set_certificate_subject_attributes(asn1::InnerEcRequest& inner_ec_request, const std::string& its_id);
 
 void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const asn1::SequenceOfPsidSsp& psid_ssp_list);
+
+security::SecuredMessageV3
+sign_ec_request_data(ByteBufferConvertible &&request_data,
+                     security::CertificateProvider &certificate_provider);
 
 security::SecuredMessageV3
 sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
