@@ -3,6 +3,7 @@ add_vanetza_component(security
     backend_null.cpp
     basic_elements.cpp
     cam_ssp.cpp
+    canonical_certificate_provider.cpp
     certificate.cpp
     certificate_cache.cpp
     default_certificate_validator.cpp
