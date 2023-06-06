@@ -17,7 +17,7 @@ class push_back_visitor : public boost::static_visitor<void>
         push_back_visitor(int expected_version, std::list<CertificateVariant>& full_chain):
             full_chain_(full_chain),
             expected_version_(expected_version) {}
-        
+
         void operator()(const Certificate& cert) const
         {
             if(expected_version_==2){
@@ -144,7 +144,7 @@ void DefaultSignHeaderPolicy::prepare_headers(const SignRequest& request, Certif
              * subsequent certificate is the issuer of the one before it. */
             full_chain.reverse();
             signer_info = full_chain;
-            
+
             m_cam_next_certificate = m_runtime.now() + std::chrono::seconds(1);
         } else if (m_runtime.now() < m_cam_next_certificate && !m_cert_requested) {
             signer_info = boost::get<CertificateV3>(certificate_provider.own_certificate()).calculate_hash();
@@ -156,11 +156,23 @@ void DefaultSignHeaderPolicy::prepare_headers(const SignRequest& request, Certif
         if (m_unknown_certificates.size() > 0) {
             std::list<HashedId3> unknown_certificates(m_unknown_certificates.begin(), m_unknown_certificates.end());
             secured_message.set_inline_p2pcd_request(unknown_certificates);
-            
+
             m_unknown_certificates.clear();
         }
         m_cert_requested = false;
         m_chain_requested = false;
+    } else if (request.its_aid == aid::SCR) {
+        // Section 6.2.3.2.1 TS 102 941 V1.4.1
+        auto cert = boost::get<CertificateV3>(certificate_provider.own_certificate());
+        HashedId8 issuer_identifier = cert.get_issuer_identifier();
+
+        SignerInfo signer_info = std::nullptr_t();
+        // Empty HashedId8 means that the certificate is self-signed
+        // or no certificate is available as is the case for initial enrolment
+        if (issuer_identifier != HashedId8 {{0, 0, 0, 0, 0, 0, 0, 0}}) {
+            signer_info = cert.calculate_hash();
+        }
+        secured_message.set_signer_info(signer_info);
     } else {
         auto position = m_positioning.position_fix();
         if (position.altitude) {
