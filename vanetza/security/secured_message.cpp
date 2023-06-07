@@ -488,11 +488,18 @@ void SecuredMessageV3::set_generation_location(ThreeDLocation location){
     this->message->content->choice.signedData->tbsData->headerInfo.generationLocation = new_location;
 }
 
-void SecuredMessageV3::set_payload(const vanetza::ByteBuffer& payload){
-    vanetza::asn1::convert_bytebuffer_to_octet_string(
-        &(this->message->content->choice.signedData->tbsData->payload->data->content->choice.unsecuredData),
-        payload
-    );
+void SecuredMessageV3::set_payload(const vanetza::ByteBuffer& payload, PayloadTypeV3 type){
+    EtsiTs103097Data_t*& message_payload_data = this->message->content->choice.signedData->tbsData->payload->data;
+
+    if (type == PayloadTypeV3::EtsiTs103097Data) {
+            ASN_STRUCT_RESET(asn_DEF_EtsiTs103097Data, message_payload_data);
+            vanetza::asn1::decode_oer(asn_DEF_EtsiTs103097Data, (void**)&message_payload_data, payload);
+    } else if (type == PayloadTypeV3::RawUnsecured) {
+            Ieee1609Dot2Content_t* content = message_payload_data->content;
+            ASN_STRUCT_RESET(asn_DEF_Ieee1609Dot2Content, content);
+            content->present = Ieee1609Dot2Content_PR_unsecuredData;
+            vanetza::asn1::convert_bytebuffer_to_octet_string(&(content->choice.unsecuredData), payload);
+    }
 }
 
 void SecuredMessageV3::set_signature(const Signature& signature){

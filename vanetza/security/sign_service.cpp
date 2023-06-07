@@ -100,7 +100,7 @@ SignService straight_sign_serviceV3(CertificateProvider& certificate_provider, B
         SecuredMessageV3& secured_message = boost::get<SecuredMessageV3>(confirm.secured_message);
 
         sign_header_policy.prepare_headers(request, certificate_provider, secured_message);
-        secured_message.set_payload(convert_to_payload(request.plain_message));
+        secured_message.set_payload(convert_to_payload(request.plain_message), request.message_type);
 
         const auto& private_key = certificate_provider.own_private_key();
 

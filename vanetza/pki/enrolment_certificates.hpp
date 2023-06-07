@@ -45,7 +45,8 @@ void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const asn1::SequenceO
 
 security::SecuredMessageV3
 sign_ec_request_data(ByteBufferConvertible &&request_data,
-                     security::CertificateProvider &certificate_provider);
+                     security::CertificateProvider &certificate_provider,
+                     security::PayloadTypeV3 request_data_type);
 
 security::SecuredMessageV3
 sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,

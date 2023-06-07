@@ -32,6 +32,7 @@ struct SignRequest
     DownPacket plain_message;
     ItsAid its_aid;
     ByteBuffer permissions;
+    PayloadTypeV3 message_type = PayloadTypeV3::RawUnsecured;
 };
 
 // mandatory SN-SIGN.confirm parameters

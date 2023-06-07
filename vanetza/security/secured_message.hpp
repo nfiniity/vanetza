@@ -83,6 +83,12 @@ struct SecuredMessageV2
     }
 };
 
+enum class PayloadTypeV3
+{
+    RawUnsecured,
+    EtsiTs103097Data
+};
+
 class SecuredMessageV3{
     public:
          /**
@@ -110,17 +116,17 @@ class SecuredMessageV3{
         vanetza::ByteBuffer serialize() const;
         /**
          * \brief Returns the size of serialized version of the SecuredMessage V1.3.1 in COER format
-         * \return size 
+         * \return size
          */
         size_t get_size() const;
         /**
          * \brief Getter of the generation time of the SecuredMessage V1.3.1
-         * \return Shared pointer to Time 
+         * \return Shared pointer to Time
          */
         std::shared_ptr<Time64> get_generation_time() const;
         /**
          * \brief Returns the PSID (ITS-AID) (Getter)
-         * \return Psid (ITS-AID) 
+         * \return Psid (ITS-AID)
          */
         Psid_t get_psid() const;
         /**
@@ -146,8 +152,8 @@ class SecuredMessageV3{
 
         /**
          * \brief Returns a list with the unknown certificates demanded
-         * 
-         * \return List of hashedId3 with all the unkown certificates. 
+         *
+         * \return List of hashedId3 with all the unkown certificates.
          * (if the field is not present the list is returned empty)
          */
         std::list<HashedId3> get_inline_p2pcd_Request() const;
@@ -188,14 +194,17 @@ class SecuredMessageV3{
         void set_inline_p2pcd_request(std::list<HashedId3> requests);
         /**
          * \brief Setter of the Location of the message
-         * \param location ThreeDLocation 
+         * \param location ThreeDLocation
          */
         void set_generation_location(ThreeDLocation location);
         /**
          * \brief Setter of payload
          * \param payload Buffer with the payload
+         * \param type Type of the payload, default is unsecuredData
          */
-        void set_payload(const vanetza::ByteBuffer& payload);
+        void set_payload(
+            const vanetza::ByteBuffer &payload,
+            PayloadTypeV3 type = PayloadTypeV3::RawUnsecured);
         /**
          * \brief Setter of the signature of the message
          * \param signature Signature

@@ -25,12 +25,16 @@ build_enrolment_request(const std::string &its_id,
 {
     asn1::InnerEcRequest inner_ec_request = build_inner_ec_request(its_id, verification_key, psid_ssp_list);
 
-    security::SecuredMessageV3 signed_inner_ec_request_message = sign_inner_ec_request(std::move(inner_ec_request), verification_key);
+    security::SecuredMessageV3 signed_inner_ec_request_message =
+        sign_inner_ec_request(std::move(inner_ec_request), verification_key);
     ByteBuffer tmp_inner = signed_inner_ec_request_message.serialize();
     asn1::EtsiTs103097Data signed_inner_ec_request;
     signed_inner_ec_request.decode(tmp_inner);
 
-    security::SecuredMessageV3 signed_outer_ec_request_message = sign_ec_request_data(std::move(signed_inner_ec_request), active_certificate_provider);
+    security::SecuredMessageV3 signed_outer_ec_request_message =
+        sign_ec_request_data(std::move(signed_inner_ec_request),
+                             active_certificate_provider,
+                             security::PayloadTypeV3::EtsiTs103097Data);
     ByteBuffer tmp_outer = signed_outer_ec_request_message.serialize();
     asn1::EtsiTs103097Data signed_outer_ec_request;
     signed_outer_ec_request.decode(tmp_outer);
@@ -113,7 +117,8 @@ void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const asn1::SequenceO
 // Common method to sign both the inner and outer data structures
 security::SecuredMessageV3
 sign_ec_request_data(ByteBufferConvertible &&request_data,
-                     security::CertificateProvider &certificate_provider)
+                     security::CertificateProvider &certificate_provider,
+                     security::PayloadTypeV3 request_data_type)
 {
     std::unique_ptr<security::Backend> backend(security::create_backend("default"));
     // Position is not used for signing here, so we can use a dummy provider
@@ -128,6 +133,7 @@ sign_ec_request_data(ByteBufferConvertible &&request_data,
     DownPacket packet;
     packet.layer(OsiLayer::Application) = std::move(request_data);
     sign_request.plain_message = std::move(packet);
+    sign_request.message_type = request_data_type;
 
     security::SignConfirm sign_confirm = sign_service(std::move(sign_request));
     return boost::get<security::SecuredMessageV3>(sign_confirm.secured_message);
@@ -138,7 +144,9 @@ sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
                       const security::openssl::EvpKey &verification_key)
 {
     security::SelfCertificateProvider verification_key_provider(verification_key.private_key());
-    return sign_ec_request_data(std::move(inner_ec_request), verification_key_provider);
+    return sign_ec_request_data(std::move(inner_ec_request),
+                                verification_key_provider,
+                                security::PayloadTypeV3::RawUnsecured);
 }
 
 } // namespace pki
