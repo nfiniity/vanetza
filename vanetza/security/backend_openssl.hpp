@@ -33,7 +33,7 @@ public:
 
     /*
      * Encrypt data using ECIES with AES-128-CCM and SHA256-HMAC
-     * as described in ETSI TS 102 941 V1.4.1 Annex F
+     * as described in IEEE 1609.2 Section 5.3.5 and ETSI TS 102 941 V1.4.1 Annex F
      * \param public_key public key of recipient
      * \param curve_name name of curve of public key
      * \param data data to encrypt

@@ -14,6 +14,7 @@ namespace pki {
 
 /*
  * Build an Enrolment Certificate Request
+ * as described in ETSI TS 102 941 V1.4.1 Section 6.2.3.2.1
  * \param its_id canonical id for initial enrolment or HashedId8 of current EC for re-enrolment
  * \param verification_key new EC public key
  * \param active_certificate_provider certificate provider for current EC
