@@ -335,18 +335,21 @@ std::array<uint8_t, N> BackendOpenSsl::xor_encrypt_decrypt(const std::array<uint
     return output;
 }
 
-std::array<uint8_t, 32> BackendOpenSsl::hmac_sha256(const ByteBuffer &key,
+std::array<uint8_t, 16> BackendOpenSsl::hmac_sha256(const ByteBuffer &key,
                                                     const ByteBuffer &data) const
 {
     EVP_MD *digest = EVP_MD_fetch(nullptr, "SHA256", nullptr);
 
-    std::array<uint8_t, 32> result;
+    std::array<uint8_t, 32> tmp;
     unsigned int hmac_len;
     openssl::check(HMAC(digest, key.data(), key.size(), data.data(), data.size(),
-                        result.data(), &hmac_len) != nullptr);
-    assert(hmac_len == result.size());
+                        tmp.data(), &hmac_len) != nullptr);
+    assert(hmac_len == tmp.size());
 
     EVP_MD_free(digest);
+
+    std::array<uint8_t, 16> result;
+    std::copy_n(tmp.begin(), result.size(), result.begin());
     return result;
 }
 

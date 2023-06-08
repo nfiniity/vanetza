@@ -52,6 +52,9 @@ public:
                     const std::array<uint8_t, 12>& iv,
                     ByteBuffer& ciphertext, std::array<uint8_t, 16>& tag) const;
 
+    // HMAC with SHA256
+    std::array<uint8_t, 16> hmac_sha256(const ByteBuffer &key, const ByteBuffer &data) const;
+
 private:
     /// calculate SHA256 digest of data buffer
     std::array<uint8_t, 32> calculate_digest(const ByteBuffer& data) const;
@@ -74,9 +77,6 @@ private:
     template <std::size_t N>
     std::array<uint8_t, N> xor_encrypt_decrypt(const std::array<uint8_t, N> &key,
                                                const std::array<uint8_t, N> &input) const;
-
-    // HMAC with SHA256
-    std::array<uint8_t, 32> hmac_sha256(const ByteBuffer &key, const ByteBuffer &data) const;
 };
 
 } // namespace security
