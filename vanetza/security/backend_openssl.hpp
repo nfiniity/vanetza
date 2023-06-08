@@ -53,6 +53,8 @@ public:
                         ByteBuffer &ciphertext,
                         std::array<uint8_t, 16> &tag) const;
 
+    // key derivation function
+    ByteBuffer kdf2_sha256(const ByteBuffer &shared_secret, const ByteBuffer &shared_info, size_t output_len) const;
 
     // HMAC with SHA256
     std::array<uint8_t, 16> hmac_sha256(const ByteBuffer &key, const ByteBuffer &data) const;
@@ -70,10 +72,11 @@ private:
     // calculate shared secret from ECDH (cofactor mode) key exchange
     std::array<uint8_t, 32> ecdh_secret(openssl::EvpKey &private_key, openssl::EvpKey &public_key) const;
 
-    // derive encryption and MAC key from shared secret
-    void ecies_keys(const std::array<uint8_t, 32> &shared_secret,
-                       std::array<uint8_t, 16> &encryption_key,
-                       std::array<uint8_t, 32> &mac_key) const;
+    // derive encryption key from shared secret and shared info
+    std::array<uint8_t, 16> get_ecies_encryption_key(const std::array<uint8_t, 32> &shared_secret, const ByteBuffer& shared_info) const;
+
+    // derive MAC key from shared secret
+    std::array<uint8_t, 32> get_ecies_mac_key(const std::array<uint8_t, 32> &shared_secret) const;
 
     // XOR cipher
     template <std::size_t N>

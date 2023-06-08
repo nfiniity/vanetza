@@ -10,6 +10,7 @@
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/kdf.h>
 #include <cassert>
 
 namespace vanetza
@@ -303,25 +304,44 @@ std::array<uint8_t, 32> BackendOpenSsl::ecdh_secret(openssl::EvpKey &private_key
     return result;
 }
 
-void BackendOpenSsl::ecies_keys(const std::array<uint8_t, 32> &shared_secret,
-                   std::array<uint8_t, 16> &encryption_key,
-                   std::array<uint8_t, 32> &mac_key) const
+ByteBuffer BackendOpenSsl::kdf2_sha256(const ByteBuffer &shared_secret, const ByteBuffer &shared_info, size_t output_len) const
 {
-    // Input for encryption_key is shared secret and 0x000001
-    std::array<uint8_t, 36> input;
-    std::copy(shared_secret.begin(), shared_secret.end(), input.begin());
-    input[32] = 0x00;
-    input[33] = 0x00;
-    input[34] = 0x00;
-    input[35] = 0x01;
+    EVP_KDF *kdf = EVP_KDF_fetch(nullptr, "X963KDF", nullptr);
+    openssl::check(kdf != nullptr);
+    EVP_KDF_CTX *kdf_ctx = EVP_KDF_CTX_new(kdf);
+    openssl::check(kdf_ctx != nullptr);
 
-    std::array<uint8_t, 32> encryption_digest;
-    openssl::check(SHA256(input.data(), input.size(), encryption_digest.data()) != nullptr);
-    std::copy(encryption_digest.begin(), encryption_digest.begin() + encryption_key.size(), encryption_key.begin());
+    std::array<OSSL_PARAM, 4> kdf_params;
+    std::string digest("SHA256");
+    kdf_params[0] = OSSL_PARAM_construct_utf8_string("digest", const_cast<char *>(digest.data()), digest.size());
+    kdf_params[1] = OSSL_PARAM_construct_octet_string("secret", const_cast<uint8_t *>(shared_secret.data()), shared_secret.size());
+    kdf_params[2] = OSSL_PARAM_construct_octet_string("info", const_cast<uint8_t *>(shared_info.data()), shared_info.size());
+    kdf_params[3] = OSSL_PARAM_construct_end();
 
-    // Input for mac_key is shared secret and 0x000002
-    input[35] = 0x02;
-    openssl::check(SHA256(input.data(), input.size(), mac_key.data()) != nullptr);
+    ByteBuffer result(output_len);
+    openssl::check (1 == EVP_KDF_derive(kdf_ctx, result.data(), result.size(), kdf_params.data()));
+
+    EVP_KDF_free(kdf);
+    EVP_KDF_CTX_free(kdf_ctx);
+    return result;
+}
+
+std::array<uint8_t, 16> BackendOpenSsl::get_ecies_encryption_key(const std::array<uint8_t, 32> &shared_secret, const ByteBuffer& shared_info) const
+{
+    ByteBuffer shared_secret_bb(shared_secret.begin(), shared_secret.end());
+    ByteBuffer encryption_key_bb = kdf2_sha256(shared_secret_bb, shared_info, 16);
+    std::array<uint8_t, 16> encryption_key;
+    std::copy(encryption_key_bb.begin(), encryption_key_bb.end(), encryption_key.begin());
+    return encryption_key;
+}
+
+std::array<uint8_t, 32> BackendOpenSsl::get_ecies_mac_key(const std::array<uint8_t, 32> &shared_secret) const
+{
+    ByteBuffer shared_secret_bb(shared_secret.begin(), shared_secret.end());
+    ByteBuffer mac_key_bb = kdf2_sha256(shared_secret_bb, ByteBuffer{}, 32);
+    std::array<uint8_t, 32> mac_key;
+    std::copy(mac_key_bb.begin(), mac_key_bb.end(), mac_key.begin());
+    return mac_key;
 }
 
 template <std::size_t N>
