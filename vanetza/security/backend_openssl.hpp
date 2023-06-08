@@ -47,10 +47,12 @@ public:
     /// \see Backend::decompress_point
     boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point) override;
 
-    int ccm_encrypt(const ByteBuffer& plaintext,
-                    const std::array<uint8_t, 16>& key,
-                    const std::array<uint8_t, 12>& iv,
-                    ByteBuffer& ciphertext, std::array<uint8_t, 16>& tag) const;
+    int aes_ccm_encrypt(const ByteBuffer &plaintext,
+                        const std::array<uint8_t, 16> &key,
+                        const std::array<uint8_t, 12> &iv,
+                        ByteBuffer &ciphertext,
+                        std::array<uint8_t, 16> &tag) const;
+
 
     // HMAC with SHA256
     std::array<uint8_t, 16> hmac_sha256(const ByteBuffer &key, const ByteBuffer &data) const;

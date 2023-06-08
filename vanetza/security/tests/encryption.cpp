@@ -4,7 +4,7 @@
 
 using namespace vanetza::security;
 
-TEST(Encryption, CcmEncryption)
+TEST(Encryption, AesCcmEncryption)
 {
     BackendOpenSsl backend;
     std::array<uint8_t, 16> aes_key {{ 0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
@@ -19,7 +19,7 @@ TEST(Encryption, CcmEncryption)
     vanetza::ByteBuffer encrypted_data;
     std::array<uint8_t, 16> encrypted_data_tag;
 
-    backend.ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
+    backend.aes_ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
 
     EXPECT_EQ(encrypted_data.size(), data.size());
 }

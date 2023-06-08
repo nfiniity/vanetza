@@ -231,7 +231,7 @@ openssl::Key BackendOpenSsl::internal_public_key(const ecdsa256::PublicKey& gene
     return key;
 }
 
-int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<uint8_t, 16> &key,
+int BackendOpenSsl::aes_ccm_encrypt(const ByteBuffer &plaintext, const std::array<uint8_t, 16> &key,
                                 const std::array<uint8_t, 12> &iv, ByteBuffer &ciphertext, std::array<uint8_t, 16> &tag) const
 {
     int len;
