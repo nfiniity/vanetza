@@ -66,57 +66,47 @@ EcdsaSignature BackendOpenSsl::sign_data(const ecdsa256::PrivateKey& key, const 
     return ecdsa_signature;
 }
 
-ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const std::string& curve_name, const ByteBuffer& data) const
+EciesEncryptionResult BackendOpenSsl::encrypt_data(
+    const ecdsa256::PublicKey &key, const std::string &curve_name,
+    const ByteBuffer &data, const ByteBuffer &shared_info) const
 {
-    /*
-        NOTE: It is important that the nonce of CCM should be carefully chosen to never be used more than once for a given key.
-              To avoid timing attacks, the output of decryption should be given after performing all the computations
-              even if it outputs failed.
-    */
+    EciesEncryptionResult result;
 
     // Generate random symmetric key for AES-CCM
-    std::array<uint8_t, 16> aes_key;
-
+    auto &aes_key = result.aes_key;
     openssl::check(1 == RAND_bytes(aes_key.data(), aes_key.size()));
 
     // Generate random nonce for AES-CCM
-    std::array<uint8_t, 12> aes_nonce;
-
+    auto &aes_nonce = result.aes_nonce;
     openssl::check(1 == RAND_bytes(aes_nonce.data(), aes_nonce.size()));
 
     // Encrypt data with AES-CCM
-    ByteBuffer encrypted_data;
-    std::array<uint8_t, 16> encrypted_data_tag;
-
-    ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
+    aes_ccm_encrypt(data, aes_key, aes_nonce, result.aes_ciphertext, result.aes_tag);
 
     // Convert recipient public key to OpenSSL EVP_PKEY
     openssl::EvpKey recipient_key(key, curve_name);
 
     // Generate ephemeral key pair for ECIES
     openssl::EvpKey ephemeral_key(curve_name);
+    result.ecies_pub_key = ephemeral_key.public_key();
 
     // Derive shared secret from ephemeral private key and public key
     std::array<uint8_t, 32> shared_secret(ecdh_secret(ephemeral_key, recipient_key));
 
     // Derive encryption and signing keys for AES key encryption from shared secret with SHA-256 (concatenate counter 4 octets)
-    std::array<uint8_t, 16> ecies_encryption_key;
-    std::array<uint8_t, 32> ecies_mac_key;
-    ecies_keys(shared_secret, ecies_encryption_key, ecies_mac_key);
+    std::array<uint8_t, 16> ecies_encryption_key = get_ecies_encryption_key(shared_secret, shared_info);
+    std::array<uint8_t, 32> ecies_mac_key = get_ecies_mac_key(shared_secret);
 
     // Encrypt AES key with XOR using ECIES encryption key
-    std::array<uint8_t, 16> encrypted_aes_key(xor_encrypt_decrypt(ecies_encryption_key, aes_key));
+    auto &ecies_ciphertext = result.ecies_ciphertext;
+    ecies_ciphertext = xor_encrypt_decrypt(ecies_encryption_key, aes_key);
 
     // Calculate HMAC on encrypted AES key using ECIES signing key
     ByteBuffer ecies_mac_key_bb(ecies_mac_key.begin(), ecies_mac_key.end());
-    ByteBuffer encrypted_aes_key_bb(encrypted_aes_key.begin(), encrypted_aes_key.end());
-    std::array<uint8_t, 32> encrypted_aes_key_hmac(hmac_sha256(ecies_mac_key_bb, encrypted_aes_key_bb));
+    ByteBuffer encrypted_aes_key_bb(ecies_ciphertext.begin(), ecies_ciphertext.end());
+    result.ecies_tag = hmac_sha256(ecies_mac_key_bb, encrypted_aes_key_bb);
 
-    // Store AES key (and nonce?) for response decryption
-
-    // Cleanup
-
-    return data; // TODO
+    return result;
 }
 
 bool BackendOpenSsl::verify_data(const ecdsa256::PublicKey& key, const ByteBuffer& data, const EcdsaSignature& sig)

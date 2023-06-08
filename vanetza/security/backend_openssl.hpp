@@ -17,6 +17,20 @@ class Key;
 class EvpKey;
 } // namespace openssl
 
+struct EciesEncryptionResult
+{
+    // AES-128-CCM on the message
+    ByteBuffer aes_ciphertext;
+    std::array<uint8_t, 16> aes_tag;
+    std::array<uint8_t, 12> aes_nonce;
+    std::array<uint8_t, 16> aes_key;
+
+    // ECIES on the AES key
+    std::array<uint8_t, 16> ecies_ciphertext;
+    std::array<uint8_t, 16> ecies_tag;
+    ecdsa256::PublicKey ecies_pub_key;
+
+};
 
 /**
  * \brief Backend implementation based on OpenSSL
@@ -37,9 +51,11 @@ public:
      * \param public_key public key of recipient
      * \param curve_name name of curve of public key
      * \param data data to encrypt
-     * \return encrypted data
+     * \param shared_info additional data to be included in the ECIES encryption key derivation
+     * \return encryption result
     */
-    ByteBuffer encrypt_data(const ecdsa256::PublicKey& public_key, const std::string &curve_name, const ByteBuffer& data) const;
+    EciesEncryptionResult encrypt_data(const ecdsa256::PublicKey &key, const std::string &curve_name,
+                                       const ByteBuffer &data, const ByteBuffer &shared_info) const;
 
     /// \see Backend::verify_data
     bool verify_data(const ecdsa256::PublicKey& public_key, const ByteBuffer& data, const EcdsaSignature& sig) override;
