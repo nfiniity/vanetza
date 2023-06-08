@@ -17,7 +17,7 @@ TEST(Encryption, CcmEncryption)
 
 
     vanetza::ByteBuffer encrypted_data;
-    std::array<uint8_t, 12> encrypted_data_tag;
+    std::array<uint8_t, 16> encrypted_data_tag;
 
     backend.ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
 

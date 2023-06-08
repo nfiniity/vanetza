@@ -9,7 +9,6 @@
 #include <openssl/sha.h>
 #include <openssl/rand.h>
 #include <openssl/evp.h>
-#include <openssl/param_build.h>
 #include <openssl/hmac.h>
 #include <cassert>
 
@@ -86,7 +85,7 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const st
 
     // Encrypt data with AES-CCM
     ByteBuffer encrypted_data;
-    std::array<uint8_t, 12> encrypted_data_tag;
+    std::array<uint8_t, 16> encrypted_data_tag;
 
     ccm_encrypt(data, aes_key, aes_nonce, encrypted_data, encrypted_data_tag);
 
@@ -110,8 +109,6 @@ ByteBuffer BackendOpenSsl::encrypt_data(const ecdsa256::PublicKey& key, const st
     // Calculate HMAC on encrypted AES key using ECIES signing key
     ByteBuffer ecies_mac_key_bb(ecies_mac_key.begin(), ecies_mac_key.end());
     ByteBuffer encrypted_aes_key_bb(encrypted_aes_key.begin(), encrypted_aes_key.end());
-    // HMAC is supposed to be 16 bytes long according to ETSI TS 102 941 V1.4.1 Annex F, but OpenSSL returns 32 bytes
-    // This might be outdated because it is possible to specify which hash function was used in the Enrolment Request (TODO: verify this)
     std::array<uint8_t, 32> encrypted_aes_key_hmac(hmac_sha256(ecies_mac_key_bb, encrypted_aes_key_bb));
 
     // Store AES key (and nonce?) for response decryption
@@ -235,7 +232,7 @@ openssl::Key BackendOpenSsl::internal_public_key(const ecdsa256::PublicKey& gene
 }
 
 int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<uint8_t, 16> &key,
-                                const std::array<uint8_t, 12> &iv, ByteBuffer &ciphertext, std::array<uint8_t, 12> &tag) const
+                                const std::array<uint8_t, 12> &iv, ByteBuffer &ciphertext, std::array<uint8_t, 16> &tag) const
 {
     int len;
 
@@ -245,18 +242,18 @@ int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<ui
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     openssl::check(ctx != nullptr);
 
-    // Set IV length to 12 bytes
-    // TODO check if tag length is correct
-    OSSL_PARAM_BLD *cipher_param_bld = OSSL_PARAM_BLD_new();
-    openssl::check(cipher_param_bld &&
-                   1 == OSSL_PARAM_BLD_push_uint(cipher_param_bld, "ivlen", 12));
-    OSSL_PARAM *cipher_params = OSSL_PARAM_BLD_to_param(cipher_param_bld);
-    openssl::check(cipher_params);
+    // Set IV length to 12 bytes and tag length to 16 bytes
+    std::array<OSSL_PARAM, 3> cipher_params;
+    size_t iv_len = iv.size();
+    cipher_params[0] = OSSL_PARAM_construct_size_t("ivlen", &iv_len);
+    cipher_params[1] = OSSL_PARAM_construct_octet_string("tag", nullptr, tag.size());
+    cipher_params[2] = OSSL_PARAM_construct_end();
 
     /* Initialise the encryption operation. */
     EVP_CIPHER *cipher = EVP_CIPHER_fetch(nullptr, "AES-128-CCM", nullptr);
     openssl::check(cipher != nullptr &&
-                   1 == EVP_EncryptInit_ex2(ctx, cipher, key.data(), iv.data(), cipher_params));
+                   1 == EVP_EncryptInit_ex2(ctx, cipher, nullptr, nullptr, cipher_params.data()) &&
+                   1 == EVP_EncryptInit_ex2(ctx, nullptr, key.data(), iv.data(), nullptr));
 
     /*
      * Provide the message to be encrypted, and obtain the encrypted output.
@@ -277,15 +274,13 @@ int BackendOpenSsl::ccm_encrypt(const ByteBuffer &plaintext, const std::array<ui
 
     /* Get the tag */
     std::array<OSSL_PARAM, 2> tag_params;
-    tag_params[0] = OSSL_PARAM_construct_octet_string("tag", tag.data(), 12);
+    tag_params[0] = OSSL_PARAM_construct_octet_string("tag", tag.data(), tag.size());
     tag_params[1] = OSSL_PARAM_construct_end();
     openssl::check(1 == EVP_CIPHER_CTX_get_params(ctx, tag_params.data()));
 
     /* Clean up */
     EVP_CIPHER_CTX_free(ctx);
     EVP_CIPHER_free(cipher);
-    OSSL_PARAM_free(cipher_params);
-    OSSL_PARAM_BLD_free(cipher_param_bld);
 
     return ciphertext_len;
 }
