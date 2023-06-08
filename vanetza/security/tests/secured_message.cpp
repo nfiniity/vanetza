@@ -156,3 +156,31 @@ TEST(SecuredMessageV3, SecuredMessageV3_constructor_and_serializer){
     ASSERT_EQ(given, when);
 
 }
+
+TEST(SecuredMessageV3, SecuredMessageV3_encrypted_constructor)
+{
+    Ieee1609Dot2Data_t* data = vanetza::asn1::allocate<Ieee1609Dot2Data_t>();
+    data->protocolVersion = 3;
+
+    Ieee1609Dot2Content_t* content = vanetza::asn1::allocate<Ieee1609Dot2Content_t>();
+    data->content = content;
+
+    CHOICE_variant_set_presence(&asn_DEF_Ieee1609Dot2Content, content, Ieee1609Dot2Content_PR_encryptedData);
+    SymmetricCiphertext_t& symmetric_ciphertext = content->choice.encryptedData.ciphertext;
+
+    CHOICE_variant_set_presence(&asn_DEF_SymmetricCiphertext, &symmetric_ciphertext, SymmetricCiphertext_PR_aes128ccm);
+    AesCcmCiphertext_t& aes_ccm_ciphertext = symmetric_ciphertext.choice.aes128ccm;
+
+    std::array<uint8_t, 12> nonce {0};
+    OCTET_STRING_fromBuf(&aes_ccm_ciphertext.nonce, reinterpret_cast<const char*>(nonce.data()), nonce.size());
+
+    vanetza::ByteBuffer data_buffer = vanetza::asn1::encode_oer(asn_DEF_Ieee1609Dot2Data, data);
+
+    bool want_encrypted_message = true;
+    vanetza::security::SecuredMessageV3 secured_message(want_encrypted_message);
+    vanetza::ByteBuffer sm_buffer = secured_message.serialize();
+
+    ASSERT_EQ(data_buffer, sm_buffer);
+
+    vanetza::asn1::free(asn_DEF_Ieee1609Dot2Data, data);
+}

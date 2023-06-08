@@ -92,9 +92,14 @@ enum class PayloadTypeV3
 class SecuredMessageV3{
     public:
          /**
-         * \brief Constructor of SecuredMessage V1.3.1 (Creates a white message completely empty)
+         * \brief Constructor of SecuredMessage V1.3.1 (Creates an empty message template for a signed message)
          */
-        SecuredMessageV3();
+        SecuredMessageV3(): SecuredMessageV3(false) {};
+         /**
+         * \brief Constructor of SecuredMessage V1.3.1
+         * \param encrypted choose between true: encryptedData or false: signedData for message content template
+         */
+        explicit SecuredMessageV3(bool encrypted);
         ~SecuredMessageV3();
         /**
          * \brief Constructor of SecuredMessage V1.3.1 (Deserializes the COER encoded Secured Message)
