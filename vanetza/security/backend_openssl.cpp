@@ -290,12 +290,10 @@ std::array<uint8_t, 32> BackendOpenSsl::ecdh_secret(openssl::EvpKey &private_key
     std::array<uint8_t, 32> result;
     size_t len;
 
-    // TODO: check if cofactor mode is needed for ECDH
-    // ETSI 102 941 V1.4.1 Annex F example does not use cofactor mode
-    // ETSI 103 097 V1.4.1 Section 5.3 refers to IEEE 1609.2 Section 5.3.5.1 which uses cofactor mode
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_pkey(nullptr, private_key, nullptr);
     openssl::check(ctx != nullptr &&
                    1 == EVP_PKEY_derive_init(ctx) &&
+                   1 == EVP_PKEY_CTX_set_ecdh_cofactor_mode(ctx, 1) && // Enable cofactor mode
                    1 == EVP_PKEY_derive_set_peer(ctx, public_key) &&
                    1 == EVP_PKEY_derive(ctx, result.data(), &len));
 

@@ -62,7 +62,7 @@ private:
     /// convert to internal format of public key
     openssl::Key internal_public_key(const ecdsa256::PublicKey&) const;
 
-    // calculate shared secret from ECDH key exchange
+    // calculate shared secret from ECDH (cofactor mode) key exchange
     std::array<uint8_t, 32> ecdh_secret(openssl::EvpKey &private_key, openssl::EvpKey &public_key) const;
 
     // derive encryption and MAC key from shared secret
