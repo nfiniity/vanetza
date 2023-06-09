@@ -230,6 +230,19 @@ class SecuredMessageV3{
          * \param digest Digest
          */
         void set_aes_ccm_ciphertext(const ByteBuffer &ccm_ciphertext, const std::array<uint8_t, 12> &nonce);
+        /**
+         * \brief Add a certificate recipient info to the message
+         * \param recipient_id HashedId8 of the recipient certificate
+         * \param curve_name Name of the curve used for ECIES
+         * \param ecies_ciphertext Ciphertext of the ECIES encrypted symmetric key
+         * \param ecies_tag Tag of the ECIES encrypted symmetric key
+         * \param ecies_pub_key Ephemeral public key of the ECIES encryption
+         */
+        void add_cert_recip_info(const HashedId8 &recipient_id,
+                                 const std::string &curve_name,
+                                 const std::array<uint8_t, 16> &ecies_ciphertext,
+                                 const std::array<uint8_t, 16> &ecies_tag,
+                                 const ecdsa256::PublicKey &ecies_pub_key);
 
     private:
         vanetza::asn1::EtsiTs103097Data message;
