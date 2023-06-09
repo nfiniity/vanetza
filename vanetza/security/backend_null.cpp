@@ -20,7 +20,7 @@ bool BackendNull::verify_data(const ecdsa256::PublicKey&, const ByteBuffer&, con
     return true;
 }
 
-boost::optional<Uncompressed> BackendNull::decompress_point(const EccPoint& ecc_point)
+boost::optional<Uncompressed> BackendNull::decompress_point(const EccPoint& ecc_point, const std::string& curve_name)
 {
     return boost::none;
 }

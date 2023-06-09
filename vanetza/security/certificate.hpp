@@ -261,7 +261,7 @@ class CertificateV3{
         vanetza::security::StartAndEndValidity get_start_and_end_validity() const;
         /**
          * \brief The duration until the certificate expires
-         * \return The duration 
+         * \return The duration
          */
         Clock::duration get_validity_duration() const;
         /**
@@ -312,13 +312,18 @@ class CertificateV3{
          */
         boost::optional<Uncompressed> get_uncompressed_public_key(Backend& backend) const;
         /**
+         * \brief Getter of the public key curve name
+         * \return public key curve name (if available) "prime256v1" or "brainpoolP256r1"
+         */
+        boost::optional<std::string> get_public_key_curve_name() const;
+        /**
          * \brief The version of the standard of the certificate
          * \return version (3)
          */
         uint8_t version() const { return 3; }
     private:
         void EccP256CurvePoint_to_x_only(EccP256CurvePoint_t& curve_point) const; //Needed to calculate hash
-        
+
         vanetza::asn1::EtsiTs103097Certificate certificate;
 
 };

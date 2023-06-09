@@ -32,7 +32,7 @@ public:
     bool verify_data(const ecdsa256::PublicKey& public_key, const ByteBuffer& data, const EcdsaSignature& sig) override;
 
     /// \see Backend::decompress_point
-    boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point) override;
+    boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point, const std::string& curve_name = "prime256v1") override;
 
     /**
      * \brief generate a private key and the corresponding public key

@@ -118,10 +118,21 @@ bool BackendOpenSsl::verify_data(const ecdsa256::PublicKey& key, const ByteBuffe
     return (ECDSA_do_verify(digest.data(), digest.size(), signature, pub) == 1);
 }
 
-boost::optional<Uncompressed> BackendOpenSsl::decompress_point(const EccPoint& ecc_point)
+boost::optional<Uncompressed> BackendOpenSsl::decompress_point(const EccPoint& ecc_point, const std::string& curve_name)
 {
     struct DecompressionVisitor : public boost::static_visitor<bool>
     {
+        explicit DecompressionVisitor(const std::string &curve_name)
+        {
+            if (curve_name == "prime256v1") {
+                curve = NID_X9_62_prime256v1;
+            } else if (curve_name == "brainpoolP256r1") {
+                curve = NID_brainpoolP256r1;
+            } else {
+                throw std::invalid_argument("Unsupported curve name");
+            }
+        }
+
         bool operator()(const X_Coordinate_Only&)
         {
             return false;
@@ -147,7 +158,7 @@ boost::optional<Uncompressed> BackendOpenSsl::decompress_point(const EccPoint& e
         {
             openssl::BigNumberContext ctx;
             openssl::BigNumber x_coordinate(x);
-            openssl::Group group(NID_X9_62_prime256v1);
+            openssl::Group group(curve);
             openssl::Point point(group);
             openssl::BigNumber y_coordinate;
 
@@ -172,9 +183,10 @@ boost::optional<Uncompressed> BackendOpenSsl::decompress_point(const EccPoint& e
         }
 
         Uncompressed result;
+        int curve;
     };
 
-    DecompressionVisitor visitor;
+    DecompressionVisitor visitor(curve_name);
     if (boost::apply_visitor(visitor, ecc_point)) {
         return visitor.result;
     } else {

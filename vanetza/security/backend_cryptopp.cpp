@@ -60,10 +60,20 @@ bool BackendCryptoPP::verify_data(const PublicKey& public_key, const ByteBuffer&
 }
 
 
-boost::optional<Uncompressed> BackendCryptoPP::decompress_point(const EccPoint& ecc_point)
+boost::optional<Uncompressed> BackendCryptoPP::decompress_point(const EccPoint& ecc_point, const std::string& curve_name)
 {
     struct DecompressionVisitor : public boost::static_visitor<bool>
     {
+        explicit DecompressionVisitor(const std::string& curve_name) {
+            if (curve_name == "prime256v1") {
+                this->group = CryptoPP::ASN1::secp256r1();
+            } else if (curve_name == "brainpoolP256r1") {
+                this->group = CryptoPP::ASN1::brainpoolP256r1();
+            } else {
+                throw std::invalid_argument("Unsupported curve name");
+            }
+        }
+
         bool operator()(const X_Coordinate_Only&)
         {
             return false;
@@ -95,7 +105,6 @@ boost::optional<Uncompressed> BackendCryptoPP::decompress_point(const EccPoint& 
             std::copy(x.begin(), x.end(), std::back_inserter(compact));
 
             BackendCryptoPP::Point point;
-            CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP> group(CryptoPP::ASN1::secp256r1());
             group.GetCurve().DecodePoint(point, compact.data(), compact.size());
 
             result.x = x;
@@ -104,9 +113,10 @@ boost::optional<Uncompressed> BackendCryptoPP::decompress_point(const EccPoint& 
         }
 
         Uncompressed result;
+        CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP> group;
     };
 
-    DecompressionVisitor visitor;
+    DecompressionVisitor visitor(curve_name);
     if (boost::apply_visitor(visitor, ecc_point)) {
         return visitor.result;
     } else {

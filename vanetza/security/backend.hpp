@@ -45,7 +45,7 @@ public:
      * \param ecc_point elliptic curve point
      * \return uncompressed point
      */
-    virtual boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point) = 0;
+    virtual boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point, const std::string& curve_name = "prime256v1") = 0;
 
     virtual ~Backend() = default;
 };

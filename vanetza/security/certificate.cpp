@@ -387,9 +387,9 @@ void CertificateV3::EccP256CurvePoint_to_x_only(EccP256CurvePoint_t& curve_point
 }
 
 ByteBuffer CertificateV3::convert_for_signing() const {
-    // The hash is calculated over the ToBeSignedCertificate 
+    // The hash is calculated over the ToBeSignedCertificate
     std::unique_ptr<ToBeSignedCertificate_t> to_be_signed{static_cast<ToBeSignedCertificate_t*>(vanetza::asn1::copy(asn_DEF_ToBeSignedCertificate, &(this->certificate->toBeSigned)))};
-    
+
     // The standard states that all the curve points must be compressed to x-only to be hashed
     if(to_be_signed.get()->encryptionKey){
         switch (to_be_signed.get()->encryptionKey->publicKey.present){
@@ -536,19 +536,40 @@ boost::optional<Uncompressed> CertificateV3::get_uncompressed_public_key(Backend
 {
     boost::optional<Uncompressed> public_key_coordinates;
     EccPoint ecc_point;
+    std::string curve_name;
     if (this->certificate->toBeSigned.verifyKeyIndicator.present == VerificationKeyIndicator_PR_verificationKey){
         switch (this->certificate->toBeSigned.verifyKeyIndicator.choice.verificationKey.present){
             case PublicVerificationKey_PR_ecdsaNistP256:
+                curve_name = "prime256v1";
                 ecc_point = vanetza::asn1::EccP256CurvePoint_to_EccPoint(this->certificate->toBeSigned.verifyKeyIndicator.choice.verificationKey.choice.ecdsaNistP256);
                 break;
 	        case PublicVerificationKey_PR_ecdsaBrainpoolP256r1:
+                curve_name = "brainpoolP256r1";
                 ecc_point = vanetza::asn1::EccP256CurvePoint_to_EccPoint(this->certificate->toBeSigned.verifyKeyIndicator.choice.verificationKey.choice.ecdsaBrainpoolP256r1);
                 break;
+            default:
+                return public_key_coordinates;
         }
-        public_key_coordinates = backend.decompress_point(ecc_point);
+        public_key_coordinates = backend.decompress_point(ecc_point, curve_name);
     }
 
     return public_key_coordinates;
+}
+
+boost::optional<std::string> CertificateV3::get_public_key_curve_name() const
+{
+    boost::optional<std::string> curve_name;
+    if (this->certificate->toBeSigned.verifyKeyIndicator.present == VerificationKeyIndicator_PR_verificationKey){
+        switch (this->certificate->toBeSigned.verifyKeyIndicator.choice.verificationKey.present){
+            case PublicVerificationKey_PR_ecdsaNistP256:
+                curve_name = "prime256v1";
+                break;
+	        case PublicVerificationKey_PR_ecdsaBrainpoolP256r1:
+                curve_name = "brainpoolP256r1";
+                break;
+        }
+    }
+    return curve_name;
 }
 
 boost::optional<ecdsa256::PublicKey>  CertificateV3::get_public_key(Backend& backend) const
