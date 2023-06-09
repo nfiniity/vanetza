@@ -148,19 +148,26 @@ EvpKey::EvpKey(const std::string &curve_name) : evpKey(EVP_EC_gen(curve_name.dat
 }
 
 // Convert from our public key format to OpenSSL EVP_PKEY
-EvpKey::EvpKey(const ecdsa256::PublicKey &key, const std::string &curve_name): evpKey(nullptr)
+EvpKey::EvpKey(const ecdsa256::PublicKey &pub_key,
+               const std::string &curve_name,
+               const boost::optional<ecdsa256::PrivateKey> &priv_key) : evpKey(nullptr)
 {
     // Convert public key to OpenSSL import format
     std::array<uint8_t, 65> key_bytes;
     key_bytes[0] = POINT_CONVERSION_UNCOMPRESSED;
-    std::copy(key.x.begin(), key.x.end(), key_bytes.begin() + 1);
-    std::copy(key.y.begin(), key.y.end(), key_bytes.begin() + 33);
+    std::copy(pub_key.x.begin(), pub_key.x.end(), key_bytes.begin() + 1);
+    std::copy(pub_key.y.begin(), pub_key.y.end(), key_bytes.begin() + 33);
 
     // Set up parameters for EVP_PKEY_fromdata
     OSSL_PARAM_BLD *param_bld = OSSL_PARAM_BLD_new();
     check(param_bld &&
           1 == OSSL_PARAM_BLD_push_utf8_string(param_bld, "group", curve_name.data(), 0) &&
           1 == OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", key_bytes.data(), key_bytes.size()));
+    std::unique_ptr<BigNumber> bn_priv_key;
+    if (priv_key) {
+        bn_priv_key.reset(new BigNumber(priv_key->key));
+        check(1 == OSSL_PARAM_BLD_push_BN(param_bld, "priv", *bn_priv_key));
+    }
     OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(param_bld);
     check(params);
 
@@ -168,7 +175,7 @@ EvpKey::EvpKey(const ecdsa256::PublicKey &key, const std::string &curve_name): e
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(nullptr, "EC", nullptr);
     check(ctx &&
           1 == EVP_PKEY_fromdata_init(ctx) &&
-          1 == EVP_PKEY_fromdata(ctx, &evpKey, EVP_PKEY_PUBLIC_KEY, params));
+          1 == EVP_PKEY_fromdata(ctx, &evpKey, priv_key ? EVP_PKEY_KEYPAIR : EVP_PKEY_PUBLIC_KEY, params));
 
     // Check public key
     EVP_PKEY_CTX *check_ctx = EVP_PKEY_CTX_new_from_pkey(nullptr, evpKey, nullptr);

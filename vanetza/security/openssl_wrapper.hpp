@@ -4,6 +4,7 @@
 #include <vanetza/common/byte_buffer.hpp>
 #include <vanetza/security/ecdsa256.hpp>
 #include <boost/core/noncopyable.hpp>
+#include <boost/optional.hpp>
 #include <openssl/bn.h>
 #include <openssl/ecdsa.h>
 #include <openssl/err.h>
@@ -147,7 +148,9 @@ class EvpKey
 public:
     EvpKey();
     explicit EvpKey(const std::string &curve_name);
-    explicit EvpKey(const ecdsa256::PublicKey &key, const std::string &curve_name);
+    explicit EvpKey(
+        const ecdsa256::PublicKey &pub_key, const std::string &curve_name,
+        const boost::optional<ecdsa256::PrivateKey> &priv_key = boost::none);
     // non-copyable
     EvpKey(const EvpKey&) = delete;
     EvpKey& operator=(const EvpKey&) = delete;
