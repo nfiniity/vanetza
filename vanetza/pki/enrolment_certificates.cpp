@@ -5,7 +5,8 @@
 #include <vanetza/security/self_certificate_provider.hpp>
 #include <vanetza/security/sign_header_policy.hpp>
 #include <vanetza/security/sign_service.hpp>
-#include <vanetza/security/backend.hpp>
+#include <vanetza/security/encrypt_service.hpp>
+#include <vanetza/security/backend_openssl.hpp>
 #include <vanetza/pki/enrolment_certificates.hpp>
 #include <vanetza/common/its_aid.hpp>
 #include <vanetza/common/stored_position_provider.hpp>
@@ -21,6 +22,7 @@ security::SecuredMessageV3
 build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        security::CertificateProvider& active_certificate_provider,
+                       const security::CertificateV3& target_certificate,
                        const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
 {
     asn1::InnerEcRequest inner_ec_request = build_inner_ec_request(its_id, verification_key, psid_ssp_list);
@@ -39,17 +41,21 @@ build_enrolment_request(const std::string &its_id,
     asn1::EtsiTs103097Data signed_outer_ec_request;
     signed_outer_ec_request.decode(tmp_outer);
 
-    return signed_outer_ec_request_message;
+    security::SecuredMessageV3 encrypted_ec_request =
+        encrypt_ec_request(std::move(signed_outer_ec_request), target_certificate);
+
+    return encrypted_ec_request;
 }
 
 security::SecuredMessageV3
 build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        const security::openssl::EvpKey &canonical_key,
+                       const security::CertificateV3 &target_certificate,
                        const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
 {
     security::SelfCertificateProvider canonical_key_provider(canonical_key.private_key());
-    return build_enrolment_request(its_id, verification_key, canonical_key_provider, psid_ssp_list);
+    return build_enrolment_request(its_id, verification_key, canonical_key_provider, target_certificate, psid_ssp_list);
 }
 
 asn1::InnerEcRequest
@@ -147,6 +153,21 @@ sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
     return sign_ec_request_data(std::move(inner_ec_request),
                                 verification_key_provider,
                                 security::PayloadTypeV3::RawUnsecured);
+}
+
+security::SecuredMessageV3
+encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &target_certificate)
+{
+    security::BackendOpenSsl backend;
+
+    DownPacket packet;
+    packet.layer(OsiLayer::Application) = std::move(ec_request);
+
+    security::EncryptService encrypt_service = security::straight_encrypt_serviceV3(backend);
+    security::EncryptRequest encrypt_request { std::move(packet), target_certificate };
+
+    security::EncryptConfirm encrypt_confirm = encrypt_service(std::move(encrypt_request));
+    return encrypt_confirm.secured_message;
 }
 
 } // namespace pki

@@ -24,6 +24,7 @@ security::SecuredMessageV3
 build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        security::CertificateProvider& active_certificate_provider,
+                       const security::CertificateV3& target_certificate,
                        const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
 
 // Overload for initial enrolment with canonical key
@@ -31,6 +32,7 @@ security::SecuredMessageV3
 build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        const security::openssl::EvpKey &canonical_key,
+                       const security::CertificateV3& target_certificate,
                        const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
 
 asn1::InnerEcRequest
@@ -52,6 +54,9 @@ sign_ec_request_data(ByteBufferConvertible &&request_data,
 security::SecuredMessageV3
 sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
                       const security::openssl::EvpKey &verification_key);
+
+security::SecuredMessageV3
+encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &target_certificate);
 
 }
 
