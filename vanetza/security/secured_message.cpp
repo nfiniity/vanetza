@@ -307,6 +307,10 @@ bool SecuredMessageV3::is_signed_message() const {
     return false;
 }
 
+bool SecuredMessageV3::is_encrypted_message() const {
+    return this->message->content->present == Ieee1609Dot2Content_PR_encryptedData;
+}
+
 SignerInfo SecuredMessageV3::get_signer_info() const{
     SignerInfo to_return = std::nullptr_t();
     if (this->is_signed_message()){
@@ -672,6 +676,20 @@ void SecuredMessageV3::set_signer_info(const SignerInfo& signer_info){
         );
         this->message->content->choice.signedData->signer = *temp;
     }
+}
+
+void SecuredMessageV3::set_aes_ccm_ciphertext(const ByteBuffer &ccm_ciphertext, const std::array<uint8_t, 12> &nonce)
+{
+    if (!this->is_encrypted_message()) {
+        throw std::invalid_argument("SecuredMessageV3 is not of type encrypted message");
+    }
+
+    SymmetricCiphertext_t &symmetric_ciphertext = this->message->content->choice.encryptedData.ciphertext;
+    CHOICE_variant_set_presence(&asn_DEF_SymmetricCiphertext, &symmetric_ciphertext, SymmetricCiphertext_PR_aes128ccm);
+
+    AesCcmCiphertext_t &aes_ccm_ciphertext = symmetric_ciphertext.choice.aes128ccm;
+    OCTET_STRING_fromBuf(&aes_ccm_ciphertext.ccmCiphertext, reinterpret_cast<const char *>(ccm_ciphertext.data()), ccm_ciphertext.size());
+    OCTET_STRING_fromBuf(&aes_ccm_ciphertext.nonce, reinterpret_cast<const char *>(nonce.data()), nonce.size());
 }
 
 } // namespace security

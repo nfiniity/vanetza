@@ -145,6 +145,11 @@ class SecuredMessageV3{
          */
         bool is_signed_message() const;
         /**
+         * \brief Returns if the message is encrypted
+         * \return boolean
+         */
+        bool is_encrypted_message() const;
+        /**
          * \brief Returns the signer info
          * \return Signer info
          */
@@ -220,6 +225,11 @@ class SecuredMessageV3{
          * \param signer_info Signer Info
          */
         void set_signer_info(const SignerInfo& signer_info);
+        /**
+         * \brief Setter of AES-CCM ciphertext and nonce
+         * \param digest Digest
+         */
+        void set_aes_ccm_ciphertext(const ByteBuffer &ccm_ciphertext, const std::array<uint8_t, 12> &nonce);
 
     private:
         vanetza::asn1::EtsiTs103097Data message;
