@@ -89,7 +89,7 @@ private:
     std::array<uint8_t, 32> ecdh_secret(openssl::EvpKey &private_key, openssl::EvpKey &public_key) const;
 
     // derive encryption key from shared secret and shared info
-    std::array<uint8_t, 16> get_ecies_encryption_key(const std::array<uint8_t, 32> &shared_secret, const ByteBuffer& shared_info) const;
+    std::array<uint8_t, 16> get_ecies_encryption_key(const std::array<uint8_t, 32> &shared_secret, ByteBuffer shared_info) const;
 
     // derive MAC key from shared secret
     std::array<uint8_t, 32> get_ecies_mac_key(const std::array<uint8_t, 32> &shared_secret) const;

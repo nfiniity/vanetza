@@ -328,8 +328,14 @@ ByteBuffer BackendOpenSsl::kdf2_sha256(const ByteBuffer &shared_secret, const By
     return result;
 }
 
-std::array<uint8_t, 16> BackendOpenSsl::get_ecies_encryption_key(const std::array<uint8_t, 32> &shared_secret, const ByteBuffer& shared_info) const
+std::array<uint8_t, 16> BackendOpenSsl::get_ecies_encryption_key(const std::array<uint8_t, 32> &shared_secret, ByteBuffer shared_info) const
 {
+    // IEEE 1609.2 Section 5.3.5.1 Parameter P1
+    if (shared_info.empty()) {
+        std::array<uint8_t, 32> empty_string_hash = calculate_digest(ByteBuffer {});
+        shared_info = ByteBuffer(empty_string_hash.begin(), empty_string_hash.end());
+    }
+
     ByteBuffer shared_secret_bb(shared_secret.begin(), shared_secret.end());
     ByteBuffer encryption_key_bb = kdf2_sha256(shared_secret_bb, shared_info, 16);
     std::array<uint8_t, 16> encryption_key;
