@@ -147,10 +147,10 @@ class EvpKey
 {
 public:
     EvpKey();
-    explicit EvpKey(const std::string &curve_name);
-    explicit EvpKey(
-        const ecdsa256::PublicKey &pub_key, const std::string &curve_name,
-        const boost::optional<ecdsa256::PrivateKey> &priv_key = boost::none);
+    explicit EvpKey(EVP_PKEY *key);
+    explicit EvpKey(const std::string &curve_name,
+                    const boost::optional<ecdsa256::PrivateKey> &priv_key = boost::none,
+                    const boost::optional<ecdsa256::PublicKey> &pub_key = boost::none);
     // non-copyable
     EvpKey(const EvpKey&) = delete;
     EvpKey& operator=(const EvpKey&) = delete;
@@ -163,6 +163,7 @@ public:
     ecdsa256::PublicKey public_key() const;
     ecdsa256::PrivateKey private_key() const;
     operator EVP_PKEY *() { return evpKey; }
+    operator const EVP_PKEY *() const { return evpKey; }
 
   private:
     EVP_PKEY* evpKey;

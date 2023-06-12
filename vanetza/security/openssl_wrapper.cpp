@@ -141,33 +141,54 @@ EvpKey::EvpKey() : evpKey(EVP_PKEY_new())
     check(evpKey);
 }
 
-// Generate random key pair on curve
-EvpKey::EvpKey(const std::string &curve_name) : evpKey(EVP_EC_gen(curve_name.data()))
+EvpKey::EvpKey(EVP_PKEY *key) : evpKey(key)
 {
     check(evpKey);
 }
 
 // Convert from our public key format to OpenSSL EVP_PKEY
-EvpKey::EvpKey(const ecdsa256::PublicKey &pub_key,
-               const std::string &curve_name,
-               const boost::optional<ecdsa256::PrivateKey> &priv_key) : evpKey(nullptr)
+EvpKey::EvpKey(const std::string &curve_name,
+               const boost::optional<ecdsa256::PrivateKey> &priv_key,
+               const boost::optional<ecdsa256::PublicKey> &pub_key) : evpKey(nullptr)
 {
-    // Convert public key to OpenSSL import format
-    std::array<uint8_t, 65> key_bytes;
-    key_bytes[0] = POINT_CONVERSION_UNCOMPRESSED;
-    std::copy(pub_key.x.begin(), pub_key.x.end(), key_bytes.begin() + 1);
-    std::copy(pub_key.y.begin(), pub_key.y.end(), key_bytes.begin() + 33);
+    // If no public or private key is given, generate a new key pair
+    if (!pub_key && !priv_key) {
+        evpKey = EVP_EC_gen(curve_name.data());
+        return;
+    }
 
     // Set up parameters for EVP_PKEY_fromdata
     OSSL_PARAM_BLD *param_bld = OSSL_PARAM_BLD_new();
     check(param_bld &&
-          1 == OSSL_PARAM_BLD_push_utf8_string(param_bld, "group", curve_name.data(), 0) &&
-          1 == OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", key_bytes.data(), key_bytes.size()));
+          1 == OSSL_PARAM_BLD_push_utf8_string(param_bld, "group", curve_name.data(), 0));
+
     std::unique_ptr<BigNumber> bn_priv_key;
     if (priv_key) {
         bn_priv_key.reset(new BigNumber(priv_key->key));
         check(1 == OSSL_PARAM_BLD_push_BN(param_bld, "priv", *bn_priv_key));
     }
+
+    std::array<uint8_t, 65> key_bytes;
+    if (pub_key) {
+        // Convert PublicKey to OpenSSL import format
+        key_bytes[0] = POINT_CONVERSION_UNCOMPRESSED;
+        std::copy(pub_key->x.begin(), pub_key->x.end(), key_bytes.begin() + 1);
+        std::copy(pub_key->y.begin(), pub_key->y.end(), key_bytes.begin() + 33);
+    } else {
+        // Compute public key from private key
+        int group_nid = OBJ_sn2nid(curve_name.data());
+        check(group_nid != NID_undef);
+
+        Group group(group_nid);
+        Point point(group);
+        check(1 == EC_POINT_mul(group, point, *bn_priv_key, nullptr, nullptr, nullptr) &&
+              0 < EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED,
+                                     key_bytes.data(), key_bytes.size(), nullptr));
+    }
+    openssl::check(1 == OSSL_PARAM_BLD_push_octet_string(param_bld, "pub",
+                                                         key_bytes.data(),
+                                                         key_bytes.size()));
+
     OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(param_bld);
     check(params);
 
