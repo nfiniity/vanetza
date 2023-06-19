@@ -89,6 +89,11 @@ enum class PayloadTypeV3
     EtsiTs103097Data
 };
 
+struct AesCcmCiphertext {
+    ByteBuffer ciphertext_and_tag;
+    std::array<uint8_t, 12> nonce;
+};
+
 class SecuredMessageV3{
     public:
          /**
@@ -227,9 +232,19 @@ class SecuredMessageV3{
         void set_signer_info(const SignerInfo& signer_info);
         /**
          * \brief Setter of AES-CCM ciphertext and nonce
-         * \param digest Digest
+         * \param ccm_ciphertext Ciphertext
+         * \param nonce Nonce
          */
         void set_aes_ccm_ciphertext(const ByteBuffer &ccm_ciphertext, const std::array<uint8_t, 12> &nonce);
+        /**
+         * \brief Getter of AES-CCM ciphertext and nonce
+         */
+        AesCcmCiphertext get_aes_ccm_ciphertext() const;
+        /**
+         * \brief Check if message was encrypted with a given PSK
+         * \param psk Pre-shared key
+         */
+        bool check_psk_match(std::array<uint8_t, 16> psk) const;
         /**
          * \brief Add a certificate recipient info to the message
          * \param recipient_id HashedId8 of the recipient certificate

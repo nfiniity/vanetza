@@ -4,7 +4,9 @@
 #include <vanetza/security/secured_message.hpp>
 #include <vanetza/security/serialization.hpp>
 #include <vanetza/security/basic_elements.hpp>
+#include <vanetza/security/sha.hpp>
 #include <vanetza/asn1/utils.hpp>
+#include <vanetza/asn1/symmetric_encryption_key.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <vanetza/asn1/asn1c_wrapper.hpp>
 #include <iomanip>
@@ -690,6 +692,69 @@ void SecuredMessageV3::set_aes_ccm_ciphertext(const ByteBuffer &ccm_ciphertext, 
     AesCcmCiphertext_t &aes_ccm_ciphertext = symmetric_ciphertext.choice.aes128ccm;
     OCTET_STRING_fromBuf(&aes_ccm_ciphertext.ccmCiphertext, reinterpret_cast<const char *>(ccm_ciphertext.data()), ccm_ciphertext.size());
     OCTET_STRING_fromBuf(&aes_ccm_ciphertext.nonce, reinterpret_cast<const char *>(nonce.data()), nonce.size());
+}
+
+AesCcmCiphertext SecuredMessageV3::get_aes_ccm_ciphertext() const
+{
+    if (!this->is_encrypted_message()) {
+        throw std::invalid_argument("SecuredMessageV3 is not of type encrypted message");
+    }
+
+    const SymmetricCiphertext_t &symmetric_ciphertext = this->message->content->choice.encryptedData.ciphertext;
+    if (symmetric_ciphertext.present != SymmetricCiphertext_PR_aes128ccm) {
+        throw std::invalid_argument("No AES-CCM ciphertext present");
+    }
+
+    const AesCcmCiphertext_t &aes_ccm_ciphertext = symmetric_ciphertext.choice.aes128ccm;
+    AesCcmCiphertext result;
+
+    const uint8_t *ccm_ciphertext_buf_begin = aes_ccm_ciphertext.ccmCiphertext.buf;
+    const uint8_t *ccm_ciphertext_buf_end = ccm_ciphertext_buf_begin + aes_ccm_ciphertext.ccmCiphertext.size;
+    result.ciphertext_and_tag = ByteBuffer(ccm_ciphertext_buf_begin, ccm_ciphertext_buf_end);
+
+    const uint8_t *nonce_buf_begin = aes_ccm_ciphertext.nonce.buf;
+    const uint8_t *nonce_buf_end = nonce_buf_begin + aes_ccm_ciphertext.nonce.size;
+    result.nonce = std::array<uint8_t, 12>();
+    std::copy(nonce_buf_begin, nonce_buf_end, result.nonce.begin());
+
+    return result;
+}
+
+bool SecuredMessageV3::check_psk_match(std::array<uint8_t, 16> psk) const
+{
+    if (!this->is_encrypted_message()) {
+        throw std::invalid_argument("SecuredMessageV3 is not of type encrypted message");
+    }
+
+    const auto &recipient_list = this->message->content->choice.encryptedData.recipients.list;
+    // Message should only have one recipient
+    if (recipient_list.count != 1) {
+        throw std::invalid_argument("Message has no or more than one recipient");
+    }
+
+    const RecipientInfo_t &recipient_info = *recipient_list.array[0];
+    if (recipient_info.present != RecipientInfo_PR_pskRecipInfo) {
+        throw std::invalid_argument("Recipient is not of type PSK");
+    }
+
+    const HashedId8 message_psk_id = asn1::HashedId8_asn_to_HashedId8(recipient_info.choice.pskRecipInfo);
+
+    // Wrap the given PSK into a PSKRecipientInfo_t to calculate the HashedId8
+    asn1::SymmetricEncryptionKey psk_key;
+    SymmetricEncryptionKey_t *psk_key_ptr = &(*psk_key);
+    CHOICE_variant_set_presence(
+        &asn_DEF_SymmetricEncryptionKey,
+        psk_key_ptr,
+        SymmetricEncryptionKey_PR_aes128Ccm);
+    OCTET_STRING_fromBuf(&psk_key->choice.aes128Ccm, reinterpret_cast<const char *>(psk.data()), psk.size());
+
+    ByteBuffer bytes = psk_key.encode();
+    Sha256Digest digest = calculate_sha256_digest(bytes.data(), bytes.size());
+    HashedId8 psk_id;
+    assert(digest.size() >= psk_id.size());
+    std::copy(digest.end() - psk_id.size(), digest.end(), psk_id.begin());
+
+    return psk_id == message_psk_id;
 }
 
 void SecuredMessageV3::add_cert_recip_info(
