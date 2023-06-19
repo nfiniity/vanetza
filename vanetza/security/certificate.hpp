@@ -317,6 +317,23 @@ class CertificateV3{
          */
         boost::optional<std::string> get_public_key_curve_name() const;
         /**
+         * \brief Getter of the encryption public key
+         * \param backend Backend
+         * \return optional of the encryption public key
+         */
+        boost::optional<ecdsa256::PublicKey> get_encryption_public_key(Backend& backend) const;
+        /**
+         * \brief Getter of the encryption public key (in uncompressed format)
+         * \param backend Backend
+         * \return encryption public key (if available)
+         */
+        boost::optional<Uncompressed> get_encryption_uncompressed_public_key(Backend& backend) const;
+        /**
+         * \brief Getter of the encryption public key curve name
+         * \return encryption public key curve name (if available) "prime256v1" or "brainpoolP256r1"
+         */
+        boost::optional<std::string> get_encryption_public_key_curve_name() const;
+        /**
          * \brief The version of the standard of the certificate
          * \return version (3)
          */
@@ -395,6 +412,12 @@ boost::optional<ecdsa256::PublicKey> get_public_key(const CertificateVariant& ce
  */
 HashedId8 calculate_hash(const CertificateVariant&);
 
+/**
+ * Convert Uncompressed to PublicKey
+ * \param unc Uncompressed
+ * \return PublicKey
+ */
+ecdsa256::PublicKey public_key_from_uncompressed(const Uncompressed &unc);
 
 
 } // namespace security

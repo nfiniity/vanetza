@@ -575,14 +575,62 @@ boost::optional<std::string> CertificateV3::get_public_key_curve_name() const
 boost::optional<ecdsa256::PublicKey>  CertificateV3::get_public_key(Backend& backend) const
 {
     auto unc = this->get_uncompressed_public_key(backend);
-    boost::optional<ecdsa256::PublicKey> result;
-    ecdsa256::PublicKey pub;
-    if (unc && unc->x.size() == pub.x.size() && unc->y.size() == pub.y.size()) {
-        std::copy_n(unc->x.begin(), pub.x.size(), pub.x.data());
-        std::copy_n(unc->y.begin(), pub.y.size(), pub.y.data());
-        result = std::move(pub);
+    if (unc) {
+        return public_key_from_uncompressed(*unc);
+    } else {
+        return boost::none;
     }
-    return result;
+}
+
+boost::optional<std::string> CertificateV3::get_encryption_public_key_curve_name() const
+{
+    const PublicEncryptionKey_t *encryption_key = this->certificate->toBeSigned.encryptionKey;
+    if (encryption_key == nullptr) return boost::none;
+
+    const BasePublicEncryptionKey_t &public_key = encryption_key->publicKey;
+    switch (public_key.present){
+        case BasePublicEncryptionKey_PR_eciesNistP256:
+            return std::string("prime256v1");
+        case BasePublicEncryptionKey_PR_eciesBrainpoolP256r1:
+            return std::string("brainpoolP256r1");
+        default:
+            return boost::none;
+    }
+}
+
+boost::optional<Uncompressed> CertificateV3::get_encryption_uncompressed_public_key(Backend& backend) const
+{
+    const PublicEncryptionKey_t *encryption_key = this->certificate->toBeSigned.encryptionKey;
+    if (encryption_key == nullptr) return boost::none;
+
+    const BasePublicEncryptionKey_t &public_key = encryption_key->publicKey;
+    std::string curve_name;
+    const EccP256CurvePoint_t *eccP256;
+    switch (public_key.present){
+        case BasePublicEncryptionKey_PR_eciesNistP256:
+            eccP256 = &public_key.choice.eciesNistP256;
+            curve_name = "prime256v1";
+            break;
+        case BasePublicEncryptionKey_PR_eciesBrainpoolP256r1:
+            eccP256 = &public_key.choice.eciesBrainpoolP256r1;
+            curve_name = "brainpoolP256r1";
+            break;
+        default:
+            return boost::none;
+    }
+
+    EccPoint ecc_point = vanetza::asn1::EccP256CurvePoint_to_EccPoint(*eccP256);
+    return backend.decompress_point(ecc_point, curve_name);
+}
+
+boost::optional<ecdsa256::PublicKey> CertificateV3::get_encryption_public_key(Backend& backend) const
+{
+    auto unc = this->get_encryption_uncompressed_public_key(backend);
+    if (unc) {
+        return public_key_from_uncompressed(*unc);
+    } else {
+        return boost::none;
+    }
 }
 
 size_t get_size(const CertificateVariant& certificate){
@@ -712,7 +760,17 @@ HashedId8 calculate_hash(const CertificateVariant& cert){
     return boost::apply_visitor(canonical_visitor(), cert);
 }
 
+ecdsa256::PublicKey public_key_from_uncompressed(const Uncompressed &unc)
+{
+    ecdsa256::PublicKey pub;
+    if (unc.x.size() != pub.x.size() || unc.y.size() != pub.y.size()) {
+        throw std::invalid_argument("Invalid uncompressed public key");
+    }
 
+    std::copy_n(unc.x.begin(), pub.x.size(), pub.x.data());
+    std::copy_n(unc.y.begin(), pub.y.size(), pub.y.data());
+    return pub;
+}
 
 } // ns security
 } // ns vanetza
