@@ -726,19 +726,6 @@ bool SecuredMessageV3::check_psk_match(std::array<uint8_t, 16> psk) const
         throw std::invalid_argument("SecuredMessageV3 is not of type encrypted message");
     }
 
-    const auto &recipient_list = this->message->content->choice.encryptedData.recipients.list;
-    // Message should only have one recipient
-    if (recipient_list.count != 1) {
-        throw std::invalid_argument("Message has no or more than one recipient");
-    }
-
-    const RecipientInfo_t &recipient_info = *recipient_list.array[0];
-    if (recipient_info.present != RecipientInfo_PR_pskRecipInfo) {
-        throw std::invalid_argument("Recipient is not of type PSK");
-    }
-
-    const HashedId8 message_psk_id = asn1::HashedId8_asn_to_HashedId8(recipient_info.choice.pskRecipInfo);
-
     // Wrap the given PSK into a PSKRecipientInfo_t to calculate the HashedId8
     asn1::SymmetricEncryptionKey psk_key;
     SymmetricEncryptionKey_t *psk_key_ptr = &(*psk_key);
@@ -754,7 +741,22 @@ bool SecuredMessageV3::check_psk_match(std::array<uint8_t, 16> psk) const
     assert(digest.size() >= psk_id.size());
     std::copy(digest.end() - psk_id.size(), digest.end(), psk_id.begin());
 
-    return psk_id == message_psk_id;
+    // Check every RecipientInfo for a PSKRecipientInfo with matching PSK
+    const auto &recipient_list = this->message->content->choice.encryptedData.recipients.list;
+
+    for (int i = 0; i < recipient_list.count; i++) {
+        const RecipientInfo_t &recipient_info = *recipient_list.array[i];
+        if (recipient_info.present != RecipientInfo_PR_pskRecipInfo) {
+            continue;
+        }
+
+        const HashedId8 message_psk_id = asn1::HashedId8_asn_to_HashedId8(recipient_info.choice.pskRecipInfo);
+        if (psk_id == message_psk_id) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void SecuredMessageV3::add_cert_recip_info(
