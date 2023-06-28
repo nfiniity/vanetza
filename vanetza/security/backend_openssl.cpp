@@ -295,6 +295,57 @@ int BackendOpenSsl::aes_ccm_encrypt(const ByteBuffer &plaintext, const std::arra
     return ciphertext_len;
 }
 
+ByteBuffer BackendOpenSsl::aes_ccm_decrypt(const std::array<uint8_t, 16> &key,
+                                           const std::array<uint8_t, 12> &iv,
+                                           const ByteBuffer &ciphertext,
+                                           std::array<uint8_t, 16> &tag) const
+{
+    int len;
+
+    int plaintext_len;
+
+    /* Create and initialise the context */
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    openssl::check(ctx != nullptr);
+
+    // Set IV length to 12 bytes and tag length to 16 bytes
+    std::array<OSSL_PARAM, 3> cipher_params;
+    size_t iv_len = iv.size();
+    cipher_params[0] = OSSL_PARAM_construct_size_t("ivlen", &iv_len);
+    cipher_params[1] = OSSL_PARAM_construct_octet_string("tag", tag.data(), tag.size());
+    cipher_params[2] = OSSL_PARAM_construct_end();
+
+    /* Initialise the decryption operation. */
+    EVP_CIPHER *cipher = EVP_CIPHER_fetch(nullptr, "AES-128-CCM", nullptr);
+    openssl::check(cipher != nullptr &&
+                   1 == EVP_DecryptInit_ex2(ctx, cipher, nullptr, nullptr, cipher_params.data()) &&
+                   1 == EVP_DecryptInit_ex2(ctx, nullptr, key.data(), iv.data(), nullptr));
+
+    /*
+     * Provide the message to be decrypted, and obtain the plaintext output.
+     * EVP_DecryptUpdate can only be called once for this.
+     */
+    ByteBuffer plaintext(ciphertext.size());
+
+    openssl::check(1 == EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(), static_cast<int>(ciphertext.size())));
+    plaintext_len = len;
+
+    /*
+     * Finalise the decryption. Normally plaintext bytes may be written at
+     * this stage, but this does not occur in CCM mode.
+     */
+    openssl::check(1 == EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len));
+    plaintext_len += len;
+    assert(len == 0);
+
+    /* Clean up */
+    EVP_CIPHER_CTX_free(ctx);
+    EVP_CIPHER_free(cipher);
+
+    plaintext.resize(plaintext_len);
+    return plaintext;
+}
+
 EciesKeys BackendOpenSsl::get_ecies_keys(openssl::EvpKey &private_key, openssl::EvpKey &public_key, ByteBuffer shared_info) const
 {
     // Copy or create the P1 parameter used in the KDF, set0 takes ownership of the pointer.

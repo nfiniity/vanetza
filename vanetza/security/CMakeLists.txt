@@ -6,6 +6,7 @@ add_vanetza_component(security
     self_certificate_provider.cpp
     certificate.cpp
     certificate_cache.cpp
+    decrypt_service.cpp
     default_certificate_validator.cpp
     delegating_security_entity.cpp
     ecc_point.cpp

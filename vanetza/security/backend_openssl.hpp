@@ -75,7 +75,12 @@ public:
                         ByteBuffer &ciphertext,
                         std::array<uint8_t, 16> &tag) const;
 
-    // key derivation function
+    ByteBuffer aes_ccm_decrypt(const std::array<uint8_t, 16> &key,
+                               const std::array<uint8_t, 12> &iv,
+                               const ByteBuffer &ciphertext,
+                               std::array<uint8_t, 16> &tag) const;
+
+    // Key derivation function
     ByteBuffer kdf2_sha256(ByteBuffer &shared_secret, ByteBuffer &shared_info, size_t output_len) const;
 
     // HMAC with SHA256
