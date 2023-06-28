@@ -12,42 +12,65 @@
 #include <vanetza/common/stored_position_provider.hpp>
 #include <vanetza/common/manual_runtime.hpp>
 #include <vanetza/net/packet.hpp>
+#include <vanetza/asn1/etsi_ts_102_941_data.hpp>
 
 
 namespace vanetza {
 
 namespace pki {
 
-security::SecuredMessageV3
+security::EncryptConfirm
 build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        security::CertificateProvider& active_certificate_provider,
                        const security::CertificateV3& target_certificate,
                        const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
 {
+    // Build inner EC request with itsId, verificationKey and subject attributes
     asn1::InnerEcRequest inner_ec_request = build_inner_ec_request(its_id, verification_key, psid_ssp_list);
+    auto tmp = inner_ec_request.encode();
 
-    security::SecuredMessageV3 signed_inner_ec_request_message =
+    // Sign inner EC request with verification key for proof of possession
+    security::SecuredMessageV3 inner_ec_request_signed_for_pop_message =
         sign_inner_ec_request(std::move(inner_ec_request), verification_key);
-    ByteBuffer tmp_inner = signed_inner_ec_request_message.serialize();
-    asn1::EtsiTs103097Data signed_inner_ec_request;
-    signed_inner_ec_request.decode(tmp_inner);
+    ByteBuffer inner_ec_request_signed_for_pop_bb = inner_ec_request_signed_for_pop_message.serialize();
+    // Decode into a temporary object
+    InnerEcRequestSignedForPop_t *tmp_inner_ec_request_signed_for_pop = nullptr;
+    asn1::decode_oer(asn_DEF_InnerEcRequestSignedForPop,
+                     (void **)&tmp_inner_ec_request_signed_for_pop,
+                     inner_ec_request_signed_for_pop_bb);
 
+    // Wrap signed inner EC request into EtsiTs102941Data
+    asn1::EtsiTs102941Data signed_inner_ec_request_wrap;
+    signed_inner_ec_request_wrap->version = Version_v1;
+
+    EtsiTs102941DataContent_t &content = signed_inner_ec_request_wrap->content;
+    CHOICE_variant_set_presence(&asn_DEF_EtsiTs102941DataContent, &content,
+                                EtsiTs102941DataContent_PR_enrolmentRequest);
+
+    // Swap temporary object into the choice
+    InnerEcRequestSignedForPop_t &inner_ec_request_signed_for_pop = content.choice.enrolmentRequest;
+    std::swap(inner_ec_request_signed_for_pop, *tmp_inner_ec_request_signed_for_pop);
+    asn1::free(asn_DEF_InnerEcRequestSignedForPop, tmp_inner_ec_request_signed_for_pop);
+    ByteBuffer signed_inner_ec_request_wrap_bb = signed_inner_ec_request_wrap.encode();
+
+    // Final signature with currently active certificate
     security::SecuredMessageV3 signed_outer_ec_request_message =
-        sign_ec_request_data(std::move(signed_inner_ec_request),
+        sign_ec_request_data(std::move(signed_inner_ec_request_wrap),
                              active_certificate_provider,
-                             security::PayloadTypeV3::EtsiTs103097Data);
+                             security::PayloadTypeV3::RawUnsecured);
     ByteBuffer tmp_outer = signed_outer_ec_request_message.serialize();
     asn1::EtsiTs103097Data signed_outer_ec_request;
     signed_outer_ec_request.decode(tmp_outer);
 
-    security::SecuredMessageV3 encrypted_ec_request =
+    // Encryption
+    security::EncryptConfirm encrypted_ec_request =
         encrypt_ec_request(std::move(signed_outer_ec_request), target_certificate);
 
     return encrypted_ec_request;
 }
 
-security::SecuredMessageV3
+security::EncryptConfirm
 build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        const security::openssl::EvpKey &canonical_key,
@@ -155,7 +178,7 @@ sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
                                 security::PayloadTypeV3::RawUnsecured);
 }
 
-security::SecuredMessageV3
+security::EncryptConfirm
 encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &target_certificate)
 {
     security::BackendOpenSsl backend;
@@ -166,8 +189,8 @@ encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::Certific
     security::EncryptService encrypt_service = security::straight_encrypt_serviceV3(backend);
     security::EncryptRequest encrypt_request { std::move(packet), target_certificate };
 
-    security::EncryptConfirm encrypt_confirm = encrypt_service(std::move(encrypt_request));
-    return encrypt_confirm.secured_message;
+    security::EncryptConfirm encrypt_confirm = encrypt_service(encrypt_request);
+    return encrypt_confirm;
 }
 
 } // namespace pki

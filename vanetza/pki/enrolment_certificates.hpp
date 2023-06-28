@@ -7,6 +7,7 @@
 #include <vanetza/security/openssl_wrapper.hpp>
 #include <vanetza/security/secured_message.hpp>
 #include <vanetza/security/certificate_provider.hpp>
+#include <vanetza/security/encrypt_service.hpp>
 
 namespace vanetza {
 
@@ -20,7 +21,7 @@ namespace pki {
  * \param active_certificate_provider certificate provider for current EC
  * \param psid_ssp_list list of PSID/SSP pairs
 */
-security::SecuredMessageV3
+security::EncryptConfirm
 build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        security::CertificateProvider& active_certificate_provider,
@@ -28,7 +29,7 @@ build_enrolment_request(const std::string &its_id,
                        const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
 
 // Overload for initial enrolment with canonical key
-security::SecuredMessageV3
+security::EncryptConfirm
 build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        const security::openssl::EvpKey &canonical_key,
@@ -55,7 +56,7 @@ security::SecuredMessageV3
 sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
                       const security::openssl::EvpKey &verification_key);
 
-security::SecuredMessageV3
+security::EncryptConfirm
 encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &target_certificate);
 
 }
