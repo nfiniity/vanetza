@@ -67,14 +67,26 @@ EcdsaSignature BackendOpenSsl::sign_data(const ecdsa256::PrivateKey& key, const 
 }
 
 EciesEncryptionResult BackendOpenSsl::encrypt_data(
-    const ecdsa256::PublicKey &key, const std::string &curve_name,
+    const ecdsa256::PublicKey &public_key, const std::string &curve_name,
     const ByteBuffer &data, const ByteBuffer &shared_info) const
 {
-    EciesEncryptionResult result;
-
     // Generate random symmetric key for AES-CCM
-    auto &aes_key = result.aes_key;
+    std::array<uint8_t, 16> aes_key;
     openssl::check(1 == RAND_bytes(aes_key.data(), aes_key.size()));
+
+    // Generate ephemeral key pair for ECIES
+    openssl::EvpKey ephemeral_key(curve_name);
+
+    return encrypt_data(public_key, curve_name, data, shared_info, aes_key, ephemeral_key);
+}
+
+EciesEncryptionResult BackendOpenSsl::encrypt_data(
+    const ecdsa256::PublicKey &public_key, const std::string &curve_name,
+    const ByteBuffer &data, const ByteBuffer &shared_info,
+    const std::array<uint8_t, 16> &aes_key, openssl::EvpKey &ephemeral_key) const
+{
+    EciesEncryptionResult result;
+    result.aes_key = aes_key;
 
     // Generate random nonce for AES-CCM
     auto &aes_nonce = result.aes_nonce;
@@ -84,25 +96,20 @@ EciesEncryptionResult BackendOpenSsl::encrypt_data(
     aes_ccm_encrypt(data, aes_key, aes_nonce, result.aes_ciphertext, result.aes_tag);
 
     // Convert recipient public key to OpenSSL EVP_PKEY
-    openssl::EvpKey recipient_key(key, curve_name);
+    openssl::EvpKey recipient_key(curve_name, boost::none, public_key);
 
-    // Generate ephemeral key pair for ECIES
-    openssl::EvpKey ephemeral_key(curve_name);
+    // Get public ephemeral key for ECIES
     result.ecies_pub_key = ephemeral_key.public_key();
 
-    // Derive shared secret from ephemeral private key and public key
-    std::array<uint8_t, 32> shared_secret(ecdh_secret(ephemeral_key, recipient_key));
-
-    // Derive encryption and signing keys for AES key encryption from shared secret with SHA-256 (concatenate counter 4 octets)
-    std::array<uint8_t, 16> ecies_encryption_key = get_ecies_encryption_key(shared_secret, shared_info);
-    std::array<uint8_t, 32> ecies_mac_key = get_ecies_mac_key(shared_secret);
+    // Derive encryption and signing keys for AES key encryption using ECIES
+    EciesKeys ecies_keys = get_ecies_keys(ephemeral_key, recipient_key, shared_info);
 
     // Encrypt AES key with XOR using ECIES encryption key
     auto &ecies_ciphertext = result.ecies_ciphertext;
-    ecies_ciphertext = xor_encrypt_decrypt(ecies_encryption_key, aes_key);
+    ecies_ciphertext = xor_encrypt_decrypt(ecies_keys.encryption_key, aes_key);
 
     // Calculate HMAC on encrypted AES key using ECIES signing key
-    ByteBuffer ecies_mac_key_bb(ecies_mac_key.begin(), ecies_mac_key.end());
+    ByteBuffer ecies_mac_key_bb(ecies_keys.mac_key.begin(), ecies_keys.mac_key.end());
     ByteBuffer encrypted_aes_key_bb(ecies_ciphertext.begin(), ecies_ciphertext.end());
     result.ecies_tag = hmac_sha256(ecies_mac_key_bb, encrypted_aes_key_bb);
 
@@ -288,25 +295,54 @@ int BackendOpenSsl::aes_ccm_encrypt(const ByteBuffer &plaintext, const std::arra
     return ciphertext_len;
 }
 
-std::array<uint8_t, 32> BackendOpenSsl::ecdh_secret(openssl::EvpKey &private_key, openssl::EvpKey &public_key) const
+EciesKeys BackendOpenSsl::get_ecies_keys(openssl::EvpKey &private_key, openssl::EvpKey &public_key, ByteBuffer shared_info) const
 {
-    std::array<uint8_t, 32> result;
-    size_t len;
+    // Copy or create the P1 parameter used in the KDF, set0 takes ownership of the pointer.
+    // If no shared_info is provided, use the hash of an empty string.
+    // IEEE 1609.2 Section 5.3.5.1 Parameter P1
+    unsigned char *kdf_ukm = nullptr;
+    size_t kdf_ukm_len = 0;
+    if (shared_info.size() > 0) {
+        kdf_ukm = new unsigned char[shared_info.size()];
+        std::copy(shared_info.begin(), shared_info.end(), kdf_ukm);
+        kdf_ukm_len = shared_info.size();
+    } else {
+        const std::array<uint8_t, 32> empty_string_hash = calculate_digest(ByteBuffer {});
+        kdf_ukm = new unsigned char[empty_string_hash.size()];
+        std::copy(empty_string_hash.begin(), empty_string_hash.end(), kdf_ukm);
+        kdf_ukm_len = empty_string_hash.size();
+    }
 
+    // Fetch the SHA256 digest for the KDF
+    EVP_MD *digest = EVP_MD_fetch(nullptr, "SHA256", nullptr);
+    std::array<uint8_t, 48> ecdh_kdf_result;
+    size_t len = ecdh_kdf_result.size();
+
+    // Run the key agreement and KDF in one step
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_pkey(nullptr, private_key, nullptr);
     openssl::check(ctx != nullptr &&
                    1 == EVP_PKEY_derive_init(ctx) &&
                    1 == EVP_PKEY_CTX_set_ecdh_cofactor_mode(ctx, 1) && // Enable cofactor mode
+                   1 == EVP_PKEY_CTX_set_ecdh_kdf_type(ctx, EVP_PKEY_ECDH_KDF_X9_63) &&
+                   1 == EVP_PKEY_CTX_set_ecdh_kdf_md(ctx, digest) &&
+                   1 == EVP_PKEY_CTX_set0_ecdh_kdf_ukm(ctx, kdf_ukm, kdf_ukm_len) &&
+                   1 == EVP_PKEY_CTX_set_ecdh_kdf_outlen(ctx, len) &&
                    1 == EVP_PKEY_derive_set_peer(ctx, public_key) &&
-                   1 == EVP_PKEY_derive(ctx, result.data(), &len));
+                   1 == EVP_PKEY_derive(ctx, ecdh_kdf_result.data(), &len));
 
-    assert(len == result.size());
+    assert(len == ecdh_kdf_result.size());
+
     EVP_PKEY_CTX_free(ctx);
+    EVP_MD_free(digest);
 
-    return result;
+    // Extract the keys from the result
+    EciesKeys keys;
+    std::copy_n(ecdh_kdf_result.begin(), 16, keys.encryption_key.begin());
+    std::copy_n(ecdh_kdf_result.begin() + 16, 32, keys.mac_key.begin());
+    return keys;
 }
 
-ByteBuffer BackendOpenSsl::kdf2_sha256(const ByteBuffer &shared_secret, const ByteBuffer &shared_info, size_t output_len) const
+ByteBuffer BackendOpenSsl::kdf2_sha256(ByteBuffer &shared_secret, ByteBuffer &shared_info, size_t output_len) const
 {
     EVP_KDF *kdf = EVP_KDF_fetch(nullptr, "X963KDF", nullptr);
     openssl::check(kdf != nullptr);
@@ -315,9 +351,9 @@ ByteBuffer BackendOpenSsl::kdf2_sha256(const ByteBuffer &shared_secret, const By
 
     std::array<OSSL_PARAM, 4> kdf_params;
     std::string digest("SHA256");
-    kdf_params[0] = OSSL_PARAM_construct_utf8_string("digest", const_cast<char *>(digest.data()), digest.size());
-    kdf_params[1] = OSSL_PARAM_construct_octet_string("secret", const_cast<uint8_t *>(shared_secret.data()), shared_secret.size());
-    kdf_params[2] = OSSL_PARAM_construct_octet_string("info", const_cast<uint8_t *>(shared_info.data()), shared_info.size());
+    kdf_params[0] = OSSL_PARAM_construct_utf8_string("digest", &digest[0], digest.size());
+    kdf_params[1] = OSSL_PARAM_construct_octet_string("secret", shared_secret.data(), shared_secret.size());
+    kdf_params[2] = OSSL_PARAM_construct_octet_string("info", shared_info.data(), shared_info.size());
     kdf_params[3] = OSSL_PARAM_construct_end();
 
     ByteBuffer result(output_len);
@@ -326,30 +362,6 @@ ByteBuffer BackendOpenSsl::kdf2_sha256(const ByteBuffer &shared_secret, const By
     EVP_KDF_free(kdf);
     EVP_KDF_CTX_free(kdf_ctx);
     return result;
-}
-
-std::array<uint8_t, 16> BackendOpenSsl::get_ecies_encryption_key(const std::array<uint8_t, 32> &shared_secret, ByteBuffer shared_info) const
-{
-    // IEEE 1609.2 Section 5.3.5.1 Parameter P1
-    if (shared_info.empty()) {
-        std::array<uint8_t, 32> empty_string_hash = calculate_digest(ByteBuffer {});
-        shared_info = ByteBuffer(empty_string_hash.begin(), empty_string_hash.end());
-    }
-
-    ByteBuffer shared_secret_bb(shared_secret.begin(), shared_secret.end());
-    ByteBuffer encryption_key_bb = kdf2_sha256(shared_secret_bb, shared_info, 16);
-    std::array<uint8_t, 16> encryption_key;
-    std::copy(encryption_key_bb.begin(), encryption_key_bb.end(), encryption_key.begin());
-    return encryption_key;
-}
-
-std::array<uint8_t, 32> BackendOpenSsl::get_ecies_mac_key(const std::array<uint8_t, 32> &shared_secret) const
-{
-    ByteBuffer shared_secret_bb(shared_secret.begin(), shared_secret.end());
-    ByteBuffer mac_key_bb = kdf2_sha256(shared_secret_bb, ByteBuffer{}, 32);
-    std::array<uint8_t, 32> mac_key;
-    std::copy(mac_key_bb.begin(), mac_key_bb.end(), mac_key.begin());
-    return mac_key;
 }
 
 template <std::size_t N>

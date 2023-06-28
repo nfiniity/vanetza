@@ -33,13 +33,14 @@ struct EncryptRequest
 struct EncryptConfirm
 {
     SecuredMessageV3 secured_message;
+    std::array<uint8_t, 16> session_key;
 };
 
 
 /**
  * Equivalant of SN-ENCRYPT service in TS 102 723-8 v1.1.1
  */
-using EncryptService = std::function<EncryptConfirm(EncryptRequest&&)>;
+using EncryptService = std::function<EncryptConfirm(const EncryptRequest&)>;
 
 EncryptService straight_encrypt_serviceV3(BackendOpenSsl& backend);
 
