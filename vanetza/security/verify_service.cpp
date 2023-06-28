@@ -7,6 +7,7 @@
 #include <vanetza/security/sign_header_policy.hpp>
 #include <vanetza/security/sign_service.hpp>
 #include <vanetza/security/verify_service.hpp>
+#include <vanetza/security/sha.hpp>
 #include <vanetza/asn1/support/INTEGER.h>
 #include <memory>
 #include <boost/optional.hpp>
@@ -200,7 +201,7 @@ bool check_certificate_time(const Certificate& certificate, Clock::time_point no
 {
     const vanetza::security::StartAndEndValidity* time = certificate.get_restriction<ValidityRestrictionType::Time_Start_And_End>();
     return check_certificate_time_intern(time, now);
-    
+
 }
 
 bool check_certificate_time(const CertificateV3& certificate, Clock::time_point now)
@@ -295,7 +296,7 @@ bool assign_permissions(const Certificate& certificate, VerifyConfirm& confirm)
 bool assign_permissions(const CertificateV3& certificate, VerifyConfirm& confirm)
 {
     std::list<PsidSsp_t> app_prermissions = certificate.get_app_permissions();
-    
+
     std::list<PsidSsp_t>::iterator it;
     for (it = app_prermissions.begin(); it != app_prermissions.end(); ++it){
         if(it->psid == confirm.its_aid){
@@ -320,7 +321,7 @@ bool assign_permissions(const CertificateV3& certificate, VerifyConfirm& confirm
 
 bool assign_permissions(const vanetza::security::CertificateVariant& certificate, vanetza::security::VerifyConfirm& confirm)
 {
-    
+
     struct canonical_visitor : public boost::static_visitor<bool>
     {
         canonical_visitor(vanetza::security::VerifyConfirm& confirm): confirm_(confirm){}
@@ -361,7 +362,7 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         confirm.report = VerificationReport::Incompatible_Protocol;
         return confirm;
     }
-    
+
 
     std::list<HashedId3> requested_certs = secured_message.get_inline_p2pcd_Request();
     if (requested_certs.size() > 0) {
@@ -377,7 +378,7 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
             }
         }
     }
-    
+
 
     const IntX its_aid = IntX(secured_message.get_psid());
     confirm.its_aid = its_aid.get();
@@ -385,13 +386,13 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     const std::unique_ptr<SignerInfo> signer_info(new SignerInfo(secured_message.get_signer_info()));
     std::list<CertificateVariant> possible_certificates;
     bool possible_certificates_from_cache = false;
-    
+
     // use a dummy hash for initialization
     HashedId8 signer_hash;
     signer_hash.fill(0x00);
 
     std::list<CertificateVariant> temp_variant_cache;
-    
+
     if (signer_info) {
         std::list<CertificateVariant> chain;
         switch (get_type(*signer_info)) {
@@ -513,7 +514,9 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
             return confirm;
         }
 
-        if (backend.verify_data(public_key.get(), payload, *ecdsa)) {
+        const CertificateV3& certificateV3 = boost::get<CertificateV3>(cert);
+        ByteBuffer signature_input = calculate_sha256_signature_inputV3(payload, certificateV3);
+        if (backend.verify_data(public_key.get(), signature_input, *ecdsa)) {
             signer = cert;
             break;
         }
@@ -541,12 +544,12 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         confirm.certificate_validity = CertificateInvalidReason::Off_Region;
         return confirm;
     }
-    
+
     CertificateValidity cert_validity = CertificateValidity::valid();
     if (!possible_certificates_from_cache) { // certificates from cache are already verified as trusted
         cert_validity = certs.check_certificate(*signer);
     }
-    
+
     confirm.certificate_validity = cert_validity;
 
     // if certificate could not be verified return correct DecapReport
@@ -584,7 +587,7 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         confirm.certificate_validity = CertificateInvalidReason::Insufficient_ITS_AID;
         return confirm;
     }
-    
+
     // cache only certificates that are useful, one that mismatches its restrictions isn't
     cert_cache.insert(*signer);
 
@@ -869,7 +872,7 @@ VerifyService straight_verify_service(const Runtime& rt, CertificateProvider& ce
             {
                 return 2;
             }
-            
+
             int operator()(const SecuredMessageV3& message) const
             {
                 return 3;
@@ -900,7 +903,7 @@ VerifyService dummy_verify_service(VerificationReport report, CertificateValidit
             {
                 return message.header_field<HeaderFieldType::Its_Aid>();
             }
-            
+
             const IntX* operator()(const SecuredMessageV3& message) const
             {
                 return new IntX(message.get_psid());

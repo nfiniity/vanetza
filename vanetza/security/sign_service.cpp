@@ -4,6 +4,7 @@
 #include <vanetza/security/certificate_provider.hpp>
 #include <vanetza/security/sign_header_policy.hpp>
 #include <vanetza/security/sign_service.hpp>
+#include <vanetza/security/sha.hpp>
 #include <cassert>
 #include <future>
 
@@ -105,7 +106,9 @@ SignService straight_sign_serviceV3(CertificateProvider& certificate_provider, B
         const auto& private_key = certificate_provider.own_private_key();
 
         ByteBuffer data_buffer = secured_message.convert_for_signing();
-        Signature signature = backend.sign_data(private_key, data_buffer);
+        const CertificateV3& certificate = boost::get<CertificateV3>(certificate_provider.own_certificate());
+        ByteBuffer signature_input = calculate_sha256_signature_inputV3(data_buffer, certificate);
+        Signature signature = backend.sign_data(private_key, signature_input);
 
         secured_message.set_signature(signature);
 
@@ -117,17 +120,20 @@ SignService deferred_sign_serviceV3(CertificateProvider& certificate_provider, B
 {
     return [&](SignRequest&& request) -> SignConfirm {
         SignConfirm confirm;
+        confirm.secured_message = SecuredMessageV3();
         SecuredMessageV3& secured_message = boost::get<SecuredMessageV3>(confirm.secured_message);
         sign_header_policy.prepare_headers(request, certificate_provider, secured_message);
         secured_message.set_payload(convert_to_payload(request.plain_message));
 
-        const auto& private_key = certificate_provider.own_private_key();
         static const Signature placeholder = signature_placeholder();
         static const size_t signature_size = get_size(placeholder);
 
-        auto future = std::async(std::launch::deferred, [&backend, secured_message, private_key]() {
+        auto future = std::async(std::launch::deferred, [&backend, secured_message, &certificate_provider]() {
+            const auto& private_key = certificate_provider.own_private_key();
             ByteBuffer data = secured_message.convert_for_signing();
-            return backend.sign_data(private_key, data);
+            const CertificateV3& certificate = boost::get<CertificateV3>(certificate_provider.own_certificate());
+            ByteBuffer signature_input = calculate_sha256_signature_inputV3(data, certificate);
+            return backend.sign_data(private_key, signature_input);
         });
 
         EcdsaSignatureFuture signature(future.share(), signature_size);
