@@ -33,6 +33,7 @@ struct SignRequest
     ItsAid its_aid;
     ByteBuffer permissions;
     PayloadTypeV3 message_type = PayloadTypeV3::RawUnsecured;
+    bool external_payload = false;
 };
 
 // mandatory SN-SIGN.confirm parameters

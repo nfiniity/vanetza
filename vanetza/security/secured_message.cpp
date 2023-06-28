@@ -514,6 +514,24 @@ void SecuredMessageV3::set_payload(const vanetza::ByteBuffer& payload, PayloadTy
     }
 }
 
+void SecuredMessageV3::set_external_payload_hash(const std::array<uint8_t, 32>& payload_hash){
+    // Free the payload data as it is allocated by default
+    SignedDataPayload_t &signed_data_payload = *this->message->content->choice.signedData->tbsData->payload;
+    ASN_STRUCT_RESET(asn_DEF_SignedDataPayload, &signed_data_payload);
+
+    // Allocate the HashedData structure
+    signed_data_payload.extDataHash = static_cast<HashedData_t*>(vanetza::asn1::allocate(sizeof(HashedData_t)));
+    HashedData_t &hashed_data = *signed_data_payload.extDataHash;
+
+    // Set the hash
+    CHOICE_variant_set_presence(&asn_DEF_HashedData, &hashed_data, HashedData_PR_sha256HashedData);
+    OCTET_STRING_fromBuf(
+        &hashed_data.choice.sha256HashedData,
+        reinterpret_cast<const char *>(payload_hash.data()),
+        payload_hash.size()
+    );
+}
+
 void SecuredMessageV3::set_signature(const Signature& signature){
     struct ecc_point_visitor : public boost::static_visitor<EccP256CurvePoint_t> {
             EccP256CurvePoint_t operator()(const X_Coordinate_Only& x_only) const

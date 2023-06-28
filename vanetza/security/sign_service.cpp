@@ -101,7 +101,13 @@ SignService straight_sign_serviceV3(CertificateProvider& certificate_provider, B
         SecuredMessageV3& secured_message = boost::get<SecuredMessageV3>(confirm.secured_message);
 
         sign_header_policy.prepare_headers(request, certificate_provider, secured_message);
-        secured_message.set_payload(convert_to_payload(request.plain_message), request.message_type);
+        ByteBuffer payload = convert_to_payload(request.plain_message);
+        if (request.external_payload) {
+            Sha256Digest digest = calculate_sha256_digest(payload.data(), payload.size());
+            secured_message.set_external_payload_hash(digest);
+        } else {
+            secured_message.set_payload(payload, request.message_type);
+        }
 
         const auto& private_key = certificate_provider.own_private_key();
 
@@ -122,8 +128,15 @@ SignService deferred_sign_serviceV3(CertificateProvider& certificate_provider, B
         SignConfirm confirm;
         confirm.secured_message = SecuredMessageV3();
         SecuredMessageV3& secured_message = boost::get<SecuredMessageV3>(confirm.secured_message);
+
         sign_header_policy.prepare_headers(request, certificate_provider, secured_message);
-        secured_message.set_payload(convert_to_payload(request.plain_message));
+        ByteBuffer payload = convert_to_payload(request.plain_message);
+        if (request.external_payload) {
+            Sha256Digest digest = calculate_sha256_digest(payload.data(), payload.size());
+            secured_message.set_external_payload_hash(digest);
+        } else {
+            secured_message.set_payload(payload, request.message_type);
+        }
 
         static const Signature placeholder = signature_placeholder();
         static const size_t signature_size = get_size(placeholder);

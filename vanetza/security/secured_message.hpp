@@ -221,6 +221,11 @@ class SecuredMessageV3{
             const vanetza::ByteBuffer &payload,
             PayloadTypeV3 type = PayloadTypeV3::RawUnsecured);
         /**
+         * \brief Setter of external payload hash, frees previously set payload
+         * \param payload_hash SHA256 hash of the payload
+         */
+        void set_external_payload_hash(const std::array<uint8_t, 32>& payload_hash);
+        /**
          * \brief Setter of the signature of the message
          * \param signature Signature
          */
