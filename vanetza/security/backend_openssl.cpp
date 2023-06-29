@@ -444,5 +444,12 @@ std::array<uint8_t, 16> BackendOpenSsl::hmac_sha256(const ByteBuffer &key,
     return result;
 }
 
+ByteBuffer BackendOpenSsl::random_bytes(size_t len) const
+{
+    ByteBuffer result(len);
+    openssl::check(1 == RAND_bytes(result.data(), result.size()));
+    return result;
+}
+
 } // namespace security
 } // namespace vanetza

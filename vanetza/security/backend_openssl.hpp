@@ -86,6 +86,8 @@ public:
     // HMAC with SHA256
     std::array<uint8_t, 16> hmac_sha256(const ByteBuffer &key, const ByteBuffer &data) const;
 
+    ByteBuffer random_bytes(size_t len) const;
+
 private:
     /// Calculate SHA256 digest of data buffer
     std::array<uint8_t, 32> calculate_digest(const ByteBuffer& data) const;
