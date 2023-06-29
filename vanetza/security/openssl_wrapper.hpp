@@ -3,6 +3,7 @@
 
 #include <vanetza/common/byte_buffer.hpp>
 #include <vanetza/security/ecdsa256.hpp>
+#include <vanetza/asn1/public_verification_key.hpp>
 #include <boost/core/noncopyable.hpp>
 #include <boost/optional.hpp>
 #include <openssl/bn.h>
@@ -162,6 +163,7 @@ public:
     std::string group_name() const;
     ecdsa256::PublicKey public_key() const;
     ecdsa256::PrivateKey private_key() const;
+    asn1::PublicVerificationKey public_verification_key() const;
     operator EVP_PKEY *() { return evpKey; }
     operator const EVP_PKEY *() const { return evpKey; }
 

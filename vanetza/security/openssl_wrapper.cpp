@@ -268,6 +268,56 @@ ecdsa256::PrivateKey EvpKey::private_key() const
     return key;
 }
 
+asn1::PublicVerificationKey EvpKey::public_verification_key() const
+{
+    std::string own_group_name = group_name();
+    ecdsa256::PublicKey raw_public_key = public_key();
+
+    asn1::PublicVerificationKey public_verification_key_wrapper;
+    PublicVerificationKey_t &public_verification_key = *public_verification_key_wrapper;
+    OCTET_STRING_t *x = nullptr;
+    OCTET_STRING_t *y = nullptr;
+
+    if (own_group_name == "prime256v1") {
+        CHOICE_variant_set_presence(&asn_DEF_PublicVerificationKey,
+                                    &public_verification_key,
+                                    PublicVerificationKey_PR_ecdsaNistP256);
+
+        EccP256CurvePoint_t &ecc_point = public_verification_key.choice.ecdsaNistP256;
+        CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &ecc_point, EccP256CurvePoint_PR_uncompressedP256);
+
+        x = &ecc_point.choice.uncompressedP256.x;
+        y = &ecc_point.choice.uncompressedP256.y;
+    } else if (own_group_name == "brainpoolP256r1") {
+        CHOICE_variant_set_presence(&asn_DEF_PublicVerificationKey,
+                                    &public_verification_key,
+                                    PublicVerificationKey_PR_ecdsaBrainpoolP256r1);
+
+        EccP256CurvePoint_t &ecc_point = public_verification_key.choice.ecdsaBrainpoolP256r1;
+        CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &ecc_point, EccP256CurvePoint_PR_uncompressedP256);
+
+        x = &ecc_point.choice.uncompressedP256.x;
+        y = &ecc_point.choice.uncompressedP256.y;
+    } else if (own_group_name == "brainpoolP384r1") {
+        CHOICE_variant_set_presence(&asn_DEF_PublicVerificationKey,
+                                    &public_verification_key,
+                                    PublicVerificationKey_PR_ecdsaBrainpoolP384r1);
+
+        EccP384CurvePoint_t &ecc_point = public_verification_key.choice.ecdsaBrainpoolP384r1;
+        CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &ecc_point, EccP384CurvePoint_PR_uncompressedP384);
+
+        x = &ecc_point.choice.uncompressedP384.x;
+        y = &ecc_point.choice.uncompressedP384.y;
+    } else {
+        throw std::domain_error("Unsupported EC group");
+    }
+
+    OCTET_STRING_fromBuf(x, reinterpret_cast<const char*>(raw_public_key.x.data()), raw_public_key.x.size());
+    OCTET_STRING_fromBuf(y, reinterpret_cast<const char*>(raw_public_key.y.data()), raw_public_key.y.size());
+
+    return public_verification_key_wrapper;
+}
+
 } // namespace openssl
 } // namespace security
 } // namespace vanetza

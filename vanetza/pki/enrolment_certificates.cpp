@@ -98,34 +98,8 @@ build_inner_ec_request(const std::string &its_id,
 
 void set_public_verification_key(asn1::InnerEcRequest& inner_ec_request, const security::openssl::EvpKey& verification_key)
 {
-    security::ecdsa256::PublicKey public_key = verification_key.public_key();
-    std::string group_name = verification_key.group_name();
-
-    if (group_name == "prime256v1") {
-        inner_ec_request->publicKeys.verificationKey.present = PublicVerificationKey_PR_ecdsaNistP256;
-        inner_ec_request->publicKeys.verificationKey.choice.ecdsaNistP256.present = EccP256CurvePoint_PR_uncompressedP256;
-        OCTET_STRING_fromBuf(
-            &inner_ec_request->publicKeys.verificationKey.choice.ecdsaNistP256
-                 .choice.uncompressedP256.x,
-            reinterpret_cast<const char*>(public_key.x.data()), public_key.x.size());
-        OCTET_STRING_fromBuf(
-            &inner_ec_request->publicKeys.verificationKey.choice.ecdsaNistP256
-                 .choice.uncompressedP256.y,
-            reinterpret_cast<const char*>(public_key.y.data()), public_key.y.size());
-    } else if (group_name == "brainpoolP256r1") {
-        inner_ec_request->publicKeys.verificationKey.present = PublicVerificationKey_PR_ecdsaBrainpoolP256r1;
-        inner_ec_request->publicKeys.verificationKey.choice.ecdsaBrainpoolP256r1.present = EccP256CurvePoint_PR_uncompressedP256;
-        OCTET_STRING_fromBuf(
-            &inner_ec_request->publicKeys.verificationKey.choice.ecdsaBrainpoolP256r1
-                 .choice.uncompressedP256.x,
-            reinterpret_cast<const char*>(public_key.x.data()), public_key.x.size());
-        OCTET_STRING_fromBuf(
-            &inner_ec_request->publicKeys.verificationKey.choice.ecdsaBrainpoolP256r1
-                 .choice.uncompressedP256.y,
-            reinterpret_cast<const char*>(public_key.y.data()), public_key.y.size());
-    } else {
-        throw std::domain_error("Unsupported EC group");
-    }
+    asn1::PublicVerificationKey public_verification_key = verification_key.public_verification_key();
+    std::swap(inner_ec_request->publicKeys.verificationKey, *public_verification_key);
 }
 
 void set_certificate_subject_attributes(asn1::InnerEcRequest& inner_ec_request, const std::string& its_id)
