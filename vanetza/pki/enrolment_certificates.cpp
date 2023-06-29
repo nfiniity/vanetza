@@ -6,6 +6,7 @@
 #include <vanetza/security/sign_header_policy.hpp>
 #include <vanetza/security/sign_service.hpp>
 #include <vanetza/security/encrypt_service.hpp>
+#include <vanetza/security/decrypt_service.hpp>
 #include <vanetza/security/backend_openssl.hpp>
 #include <vanetza/pki/enrolment_certificates.hpp>
 #include <vanetza/common/its_aid.hpp>
@@ -165,6 +166,36 @@ encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::Certific
 
     security::EncryptConfirm encrypt_confirm = encrypt_service(encrypt_request);
     return encrypt_confirm;
+}
+
+asn1::EtsiTs103097Certificate
+decode_ec_response(const security::SecuredMessageV3 &ec_response, const std::array<uint8_t, 16> &session_key)
+{
+    // Decrypt the response
+    assert(ec_response.is_encrypted_message());
+    security::BackendOpenSsl backend;
+    security::DecryptService decrypt_service = security::straight_decrypt_serviceV3(backend);
+    security::DecryptRequest decrypt_request { ec_response, session_key };
+    security::DecryptConfirm decrypt_response = decrypt_service(decrypt_request);
+
+    // Decode the EtsiTs102941Data structure
+    const vanetza::ByteBuffer etsi_ts_102_941_data_bb = decrypt_response.decrypted_message.get_payload();
+    vanetza::asn1::EtsiTs102941Data etsi_ts_102_941_data;
+    etsi_ts_102_941_data.decode(etsi_ts_102_941_data_bb);
+    // Check for correct reponse type
+    assert(etsi_ts_102_941_data->content.present == EtsiTs102941DataContent_PR_enrolmentResponse);
+
+    const InnerEcResponse_t &ec_enrolment_response = etsi_ts_102_941_data->content.choice.enrolmentResponse;
+    // Check for successful response
+    assert(ec_enrolment_response.responseCode == EnrolmentResponseCode_ok);
+
+    // Copy the certificate into the return value
+    const vanetza::ByteBuffer ec_bb = vanetza::asn1::encode_oer(
+        asn_DEF_EtsiTs103097Certificate, ec_enrolment_response.certificate);
+    vanetza::asn1::EtsiTs103097Certificate ec;
+    ec.decode(ec_bb);
+
+    return ec;
 }
 
 } // namespace pki

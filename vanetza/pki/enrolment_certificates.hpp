@@ -59,6 +59,14 @@ sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
 security::EncryptConfirm
 encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &target_certificate);
 
+/*
+ * Decrypt and parse an Enrolment Response
+ * \param ec_response encrypted EC response message
+ * \param session_key session key used for encryption
+*/
+asn1::EtsiTs103097Certificate
+decode_ec_response(const security::SecuredMessageV3 &ec_response, const std::array<uint8_t, 16> &session_key);
+
 }
 
 }
