@@ -3,7 +3,10 @@
 #include <vanetza/security/signature.hpp>
 #include <vanetza/security/ecdsa256.hpp>
 #include <openssl/param_build.h>
+#include <openssl/encoder.h>
+#include <openssl/decoder.h>
 #include <cassert>
+#include <fstream>
 #include "openssl_wrapper.hpp"
 
 namespace vanetza
@@ -316,6 +319,47 @@ asn1::PublicVerificationKey EvpKey::public_verification_key() const
     OCTET_STRING_fromBuf(y, reinterpret_cast<const char*>(raw_public_key.y.data()), raw_public_key.y.size());
 
     return public_verification_key_wrapper;
+}
+
+void EvpKey::write_private_key(const std::string &filename) const
+{
+    write_key(filename, EVP_PKEY_KEYPAIR);
+}
+
+void EvpKey::write_public_key(const std::string &filename) const
+{
+    write_key(filename, EVP_PKEY_PUBLIC_KEY);
+}
+
+void EvpKey::write_key(const std::string &file_name, int type) const
+{
+    FILE *fp = fopen(file_name.data(), "wb");
+
+    if (fp == nullptr) {
+        throw std::runtime_error("Could not open file");
+    }
+
+    OSSL_ENCODER_CTX *ectx = OSSL_ENCODER_CTX_new_for_pkey(evpKey, EVP_PKEY_KEYPAIR, "DER", nullptr, nullptr);
+    vanetza::security::openssl::check(ectx != nullptr &&
+                                      1 == OSSL_ENCODER_to_fp(ectx, fp));
+
+    fclose(fp);
+}
+
+EvpKey EvpKey::read_key(const std::string &filename) {
+    EVP_PKEY *pkey = nullptr;
+    FILE *fp = fopen(filename.data(), "rb");
+
+    if (fp == nullptr) {
+        throw std::runtime_error("Could not open file");
+    }
+
+    OSSL_DECODER_CTX *dctx = OSSL_DECODER_CTX_new_for_pkey(&pkey, "DER", nullptr, "EC", 0, nullptr, nullptr);
+    openssl::check(dctx != nullptr && 1 == OSSL_DECODER_from_fp(dctx, fp));
+
+    fclose(fp);
+
+    return EvpKey(pkey);
 }
 
 } // namespace openssl

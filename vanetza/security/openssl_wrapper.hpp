@@ -164,10 +164,17 @@ public:
     ecdsa256::PublicKey public_key() const;
     ecdsa256::PrivateKey private_key() const;
     asn1::PublicVerificationKey public_verification_key() const;
+
+    void write_private_key(const std::string &filename) const;
+    void write_public_key(const std::string &filename) const;
+    static EvpKey read_key(const std::string &filename);
+
     operator EVP_PKEY *() { return evpKey; }
     operator const EVP_PKEY *() const { return evpKey; }
 
   private:
+    void write_key(const std::string &filename, int selection) const;
+
     EVP_PKEY* evpKey;
 };
 
