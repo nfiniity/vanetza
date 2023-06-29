@@ -26,7 +26,7 @@ build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        security::CertificateProvider& active_certificate_provider,
                        const security::CertificateV3& target_certificate,
-                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
+                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list = boost::none);
 
 // Overload for initial enrolment with canonical key
 security::EncryptConfirm
@@ -34,12 +34,12 @@ build_enrolment_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
                        const security::openssl::EvpKey &canonical_key,
                        const security::CertificateV3& target_certificate,
-                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
+                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list = boost::none);
 
 asn1::InnerEcRequest
 build_inner_ec_request(const std::string &its_id,
                        const security::openssl::EvpKey &verification_key,
-                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list = boost::none);
+                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
 
 void set_public_verification_key(asn1::InnerEcRequest& inner_ec_request, const security::openssl::EvpKey& verification_key);
 
