@@ -19,6 +19,7 @@ void CertificateCache::insert_v2(const Certificate& certificate)
     std::list<CertificateVariant> certs = lookup(id, certificate.subject_info.subject_type);
 
     // TODO: implement equality comparison for Certificate
+    // Do we need this, or is it enough to check the hash?
     if (certs.size()) {
         const auto binary_insert = convert_for_signing(certificate);
         for (auto& cert : certs) {
@@ -59,6 +60,7 @@ void CertificateCache::insert_v3(const CertificateV3& certificate)
     std::list<CertificateVariant> certs = lookup(id);
 
     // TODO: implement equality comparison for Certificate
+    // Do we need this, or is it enough to check the hash?
     if (certs.size()) {
         const auto binary_insert = certificate.convert_for_signing();
         for (auto& cert : certs) {
@@ -151,7 +153,7 @@ std::list<CertificateVariant> CertificateCache::lookup(const HashedId8& id, Subj
 
     using iterator = std::multimap<HashedId8, CachedCertificate>::iterator;
     std::pair<iterator, iterator> range = m_certificates.equal_range(id);
-    
+
     std::list<CertificateVariant> matches;
     certificate_variant_matches_visitor visitor_matches = certificate_variant_matches_visitor(matches, type, *this, range.first->second.handle);
     for (auto item = range.first; item != range.second; ++item) {

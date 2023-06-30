@@ -99,7 +99,7 @@ EciesEncryptionResult BackendOpenSsl::encrypt_data(
     openssl::EvpKey recipient_key(curve_name, boost::none, public_key);
 
     // Get public ephemeral key for ECIES
-    result.ecies_pub_key = ephemeral_key.public_key();
+    result.ecies_pub_key = boost::get<asn1::EccP256CurvePoint>(ephemeral_key.ecc_curve_point());
 
     // Derive encryption and signing keys for AES key encryption using ECIES
     EciesKeys ecies_keys = get_ecies_keys(ephemeral_key, recipient_key, shared_info);

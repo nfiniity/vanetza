@@ -2,6 +2,7 @@
 #define SECURED_MESSAGE_HPP_MO3HBSXG
 
 #include <vanetza/asn1/etsi_secured_data.hpp>
+#include <vanetza/asn1/ecc_curve_point.hpp>
 #include <vanetza/security/header_field.hpp>
 #include <vanetza/security/trailer_field.hpp>
 #include <vanetza/security/payload.hpp>
@@ -262,7 +263,7 @@ class SecuredMessageV3{
                                  const std::string &curve_name,
                                  const std::array<uint8_t, 16> &ecies_ciphertext,
                                  const std::array<uint8_t, 16> &ecies_tag,
-                                 const ecdsa256::PublicKey &ecies_pub_key);
+                                 asn1::EccP256CurvePoint &ecies_pub_key);
 
     private:
         vanetza::asn1::EtsiTs103097Data message;

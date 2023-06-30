@@ -4,8 +4,10 @@
 #include <vanetza/common/byte_buffer.hpp>
 #include <vanetza/security/ecdsa256.hpp>
 #include <vanetza/asn1/public_verification_key.hpp>
+#include <vanetza/asn1/ecc_curve_point.hpp>
 #include <boost/core/noncopyable.hpp>
 #include <boost/optional.hpp>
+#include <boost/variant.hpp>
 #include <openssl/bn.h>
 #include <openssl/ecdsa.h>
 #include <openssl/err.h>
@@ -144,6 +146,8 @@ private:
     EC_KEY* eckey;
 };
 
+using EccCurvePointVariant = boost::variant<asn1::EccP256CurvePoint, asn1::EccP384CurvePoint>;
+
 class EvpKey
 {
 public:
@@ -163,6 +167,7 @@ public:
     std::string group_name() const;
     ecdsa256::PublicKey public_key() const;
     ecdsa256::PrivateKey private_key() const;
+    EccCurvePointVariant ecc_curve_point() const;
     asn1::PublicVerificationKey public_verification_key() const;
 
     void write_private_key(const std::string &filename) const;

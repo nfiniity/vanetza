@@ -387,39 +387,7 @@ void CertificateV3::EccP256CurvePoint_to_x_only(EccP256CurvePoint_t& curve_point
 }
 
 ByteBuffer CertificateV3::convert_for_signing() const {
-    // The hash is calculated over the ToBeSignedCertificate
-    std::unique_ptr<ToBeSignedCertificate_t> to_be_signed{static_cast<ToBeSignedCertificate_t*>(vanetza::asn1::copy(asn_DEF_ToBeSignedCertificate, &(this->certificate->toBeSigned)))};
-
-    // The standard states that all the curve points must be compressed to x-only to be hashed
-    if(to_be_signed.get()->encryptionKey){
-        switch (to_be_signed.get()->encryptionKey->publicKey.present){
-            case BasePublicEncryptionKey_PR_eciesNistP256:
-                this->EccP256CurvePoint_to_x_only(to_be_signed.get()->encryptionKey->publicKey.choice.eciesNistP256);
-                break;
-            case BasePublicEncryptionKey_PR_eciesBrainpoolP256r1:
-                this->EccP256CurvePoint_to_x_only(to_be_signed.get()->encryptionKey->publicKey.choice.eciesBrainpoolP256r1);
-                break;
-        }
-    }
-    // Implementing the V1.3.1 which only has explicit certificates
-    if(to_be_signed.get()->verifyKeyIndicator.present == VerificationKeyIndicator_PR_verificationKey){
-        switch(to_be_signed.get()->verifyKeyIndicator.choice.verificationKey.present){
-            case PublicVerificationKey_PR_ecdsaNistP256:
-                this->EccP256CurvePoint_to_x_only(to_be_signed.get()->verifyKeyIndicator.choice.verificationKey.choice.ecdsaNistP256);
-                break;
-	        case PublicVerificationKey_PR_ecdsaBrainpoolP256r1:
-                this->EccP256CurvePoint_to_x_only(to_be_signed.get()->verifyKeyIndicator.choice.verificationKey.choice.ecdsaBrainpoolP256r1);
-                break;
-	        case PublicVerificationKey_PR_ecdsaBrainpoolP384r1:
-                // TODO;
-                break;
-        }
-    }
-
-    ByteBuffer bytes;
-    bytes = vanetza::asn1::encode_oer(asn_DEF_ToBeSignedCertificate, to_be_signed.get());
-    vanetza::asn1::free(asn_DEF_ToBeSignedCertificate, to_be_signed.release());
-    return bytes;
+    return this->serialize();
 }
 
 HashedId8 CertificateV3::calculate_hash() const {

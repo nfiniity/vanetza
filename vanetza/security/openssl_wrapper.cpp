@@ -248,9 +248,10 @@ ecdsa256::PublicKey EvpKey::public_key() const
     std::array<uint8_t, 65> out_buf;
     size_t out_len;
 
-    check(1 == EVP_PKEY_get_octet_string_param(evpKey, "pub", out_buf.data(), out_buf.size(), &out_len) &&
-          out_len == out_buf.size() &&
-          out_buf[0] == POINT_CONVERSION_UNCOMPRESSED);
+    check(1 == EVP_PKEY_set_utf8_string_param(evpKey, "point-format", "uncompressed") &&
+          1 == EVP_PKEY_get_octet_string_param(evpKey, "pub", out_buf.data(), out_buf.size(), &out_len));
+    assert(out_len == out_buf.size());
+    assert(out_buf[0] == POINT_CONVERSION_UNCOMPRESSED);
 
     std::copy(out_buf.begin() + 1, out_buf.begin() + 33, key.x.begin());
     std::copy(out_buf.begin() + 33, out_buf.begin() + 65, key.y.begin());
@@ -271,52 +272,85 @@ ecdsa256::PrivateKey EvpKey::private_key() const
     return key;
 }
 
+EccCurvePointVariant EvpKey::ecc_curve_point() const {
+    // Get public key in compressed format
+    size_t out_len;
+
+    check(1 == EVP_PKEY_set_utf8_string_param(evpKey, "point-format", "compressed") &&
+          1 == EVP_PKEY_get_octet_string_param(evpKey, "pub", nullptr, 0, &out_len));
+
+    ByteBuffer compressed_key(out_len);
+    check(1 == EVP_PKEY_get_octet_string_param(evpKey, "pub", compressed_key.data(), compressed_key.size(), nullptr));
+    assert(out_len == compressed_key.size());
+
+    bool compressed_y_0 = compressed_key[0] == 0x02;
+    bool compressed_y_1 = compressed_key[0] == 0x03;
+    assert(compressed_y_0 || compressed_y_1);
+
+    OCTET_STRING_t *x = nullptr;
+    EccCurvePointVariant ecc_curve_point;
+
+    if (out_len == 33) {
+        asn1::EccP256CurvePoint ecc_p256_curve_point;
+
+        int choice = compressed_y_0 ? EccP256CurvePoint_PR_compressed_y_0 : EccP256CurvePoint_PR_compressed_y_1;
+        CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &(*ecc_p256_curve_point), choice);
+        if (compressed_y_0) {
+            x = &ecc_p256_curve_point->choice.compressed_y_0;
+        } else {
+            x = &ecc_p256_curve_point->choice.compressed_y_1;
+        }
+
+        ecc_curve_point = std::move(ecc_p256_curve_point);
+    } else if (out_len == 49) {
+        asn1::EccP384CurvePoint ecc_p384_curve_point;
+
+        int choice = compressed_y_0 ? EccP384CurvePoint_PR_compressed_y_0 : EccP384CurvePoint_PR_compressed_y_1;
+        CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &(*ecc_p384_curve_point), choice);
+        if (compressed_y_0) {
+            x = &ecc_p384_curve_point->choice.compressed_y_0;
+        } else {
+            x = &ecc_p384_curve_point->choice.compressed_y_1;
+        }
+
+        ecc_curve_point = std::move(ecc_p384_curve_point);
+    } else {
+        throw std::runtime_error("Invalid public key length");
+    }
+
+    OCTET_STRING_fromBuf(x, reinterpret_cast<const char*>(&compressed_key[1]), compressed_key.size() - 1);
+
+    return ecc_curve_point;
+}
+
 asn1::PublicVerificationKey EvpKey::public_verification_key() const
 {
-    std::string own_group_name = group_name();
-    ecdsa256::PublicKey raw_public_key = public_key();
-
     asn1::PublicVerificationKey public_verification_key_wrapper;
     PublicVerificationKey_t &public_verification_key = *public_verification_key_wrapper;
-    OCTET_STRING_t *x = nullptr;
-    OCTET_STRING_t *y = nullptr;
 
+    EccCurvePointVariant ecc_curve_point = this->ecc_curve_point();
+    std::string own_group_name = group_name();
     if (own_group_name == "prime256v1") {
         CHOICE_variant_set_presence(&asn_DEF_PublicVerificationKey,
                                     &public_verification_key,
                                     PublicVerificationKey_PR_ecdsaNistP256);
-
-        EccP256CurvePoint_t &ecc_point = public_verification_key.choice.ecdsaNistP256;
-        CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &ecc_point, EccP256CurvePoint_PR_uncompressedP256);
-
-        x = &ecc_point.choice.uncompressedP256.x;
-        y = &ecc_point.choice.uncompressedP256.y;
+        auto &ecc_p256_curve_point = boost::get<asn1::EccP256CurvePoint>(ecc_curve_point);
+        std::swap(public_verification_key.choice.ecdsaNistP256, *ecc_p256_curve_point);
     } else if (own_group_name == "brainpoolP256r1") {
         CHOICE_variant_set_presence(&asn_DEF_PublicVerificationKey,
                                     &public_verification_key,
                                     PublicVerificationKey_PR_ecdsaBrainpoolP256r1);
-
-        EccP256CurvePoint_t &ecc_point = public_verification_key.choice.ecdsaBrainpoolP256r1;
-        CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &ecc_point, EccP256CurvePoint_PR_uncompressedP256);
-
-        x = &ecc_point.choice.uncompressedP256.x;
-        y = &ecc_point.choice.uncompressedP256.y;
+        auto &ecc_p256_curve_point = boost::get<asn1::EccP256CurvePoint>(ecc_curve_point);
+        std::swap(public_verification_key.choice.ecdsaBrainpoolP256r1, *ecc_p256_curve_point);
     } else if (own_group_name == "brainpoolP384r1") {
         CHOICE_variant_set_presence(&asn_DEF_PublicVerificationKey,
                                     &public_verification_key,
                                     PublicVerificationKey_PR_ecdsaBrainpoolP384r1);
-
-        EccP384CurvePoint_t &ecc_point = public_verification_key.choice.ecdsaBrainpoolP384r1;
-        CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &ecc_point, EccP384CurvePoint_PR_uncompressedP384);
-
-        x = &ecc_point.choice.uncompressedP384.x;
-        y = &ecc_point.choice.uncompressedP384.y;
+        auto &ecc_p384_curve_point = boost::get<asn1::EccP384CurvePoint>(ecc_curve_point);
+        std::swap(public_verification_key.choice.ecdsaBrainpoolP384r1, *ecc_p384_curve_point);
     } else {
         throw std::domain_error("Unsupported EC group");
     }
-
-    OCTET_STRING_fromBuf(x, reinterpret_cast<const char*>(raw_public_key.x.data()), raw_public_key.x.size());
-    OCTET_STRING_fromBuf(y, reinterpret_cast<const char*>(raw_public_key.y.data()), raw_public_key.y.size());
 
     return public_verification_key_wrapper;
 }

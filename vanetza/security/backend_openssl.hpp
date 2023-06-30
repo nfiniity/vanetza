@@ -4,6 +4,7 @@
 #include <boost/optional.hpp>
 #include <vanetza/security/backend.hpp>
 #include <vanetza/security/openssl_wrapper.hpp>
+#include <vanetza/asn1/ecc_curve_point.hpp>
 #include <array>
 #include <cstdint>
 
@@ -23,7 +24,7 @@ struct EciesEncryptionResult
     // ECIES on the AES key
     std::array<uint8_t, 16> ecies_ciphertext;
     std::array<uint8_t, 16> ecies_tag;
-    ecdsa256::PublicKey ecies_pub_key;
+    asn1::EccP256CurvePoint ecies_pub_key;
 
 };
 

@@ -781,7 +781,7 @@ void SecuredMessageV3::add_cert_recip_info(
     const HashedId8 &recipient_id, const std::string &curve_name,
     const std::array<uint8_t, 16> &ecies_ciphertext,
     const std::array<uint8_t, 16> &ecies_tag,
-    const ecdsa256::PublicKey &ecies_pub_key)
+    asn1::EccP256CurvePoint &ecies_pub_key)
 {
     if (!this->is_encrypted_message()) {
         throw std::invalid_argument("SecuredMessageV3 is not of type encrypted message");
@@ -816,17 +816,9 @@ void SecuredMessageV3::add_cert_recip_info(
     OCTET_STRING_fromBuf(&ecies_enc_key.c, reinterpret_cast<const char *>(ecies_ciphertext.data()), ecies_ciphertext.size());
     OCTET_STRING_fromBuf(&ecies_enc_key.t, reinterpret_cast<const char *>(ecies_tag.data()), ecies_tag.size());
 
-    EccP256CurvePoint_t &ecies_pub_key_point = ecies_enc_key.v;
-    CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &ecies_pub_key_point, EccP256CurvePoint_PR_uncompressedP256);
-
-    auto &ecies_pub_key_point_uncompressed = ecies_pub_key_point.choice.uncompressedP256;
     // Set ECIES ephemeral public key
-    OCTET_STRING_fromBuf(&ecies_pub_key_point_uncompressed.x,
-                         reinterpret_cast<const char *>(ecies_pub_key.x.data()),
-                         ecies_pub_key.x.size());
-    OCTET_STRING_fromBuf(&ecies_pub_key_point_uncompressed.y,
-                         reinterpret_cast<const char *>(ecies_pub_key.y.data()),
-                         ecies_pub_key.y.size());
+    std::swap(ecies_enc_key.v, *ecies_pub_key);
+
 
     ASN_SEQUENCE_ADD(&this->message->content->choice.encryptedData.recipients.list, cert_recip_info);
 }
