@@ -9,6 +9,7 @@
 #include <vanetza/asn1/symmetric_encryption_key.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <vanetza/asn1/asn1c_wrapper.hpp>
+#include <vanetza/asn1/signature.hpp>
 #include <iomanip>
 #include <fstream>
 #include <iterator>
@@ -316,7 +317,6 @@ bool SecuredMessageV3::is_encrypted_message() const {
 SignerInfo SecuredMessageV3::get_signer_info() const{
     SignerInfo to_return = std::nullptr_t();
     if (this->is_signed_message()){
-        this->message->content->choice.signedData->signer;
         switch (this->message->content->choice.signedData->signer.present)
         {
 
@@ -364,64 +364,33 @@ std::list<HashedId3> SecuredMessageV3::get_inline_p2pcd_Request() const{
     return to_return;
 }
 
-vanetza::security::Signature SecuredMessageV3::get_signature() const{
-    vanetza::security::Signature to_return{};
-    if (this->is_signed_message()){
-        if (this->message->content->choice.signedData->signature.present == Signature_PR_ecdsaNistP256Signature){
-            vanetza::security::EcdsaSignature signature;
-            Signature_t ssignature = this->message->content->choice.signedData->signature;
-            EcdsaP256Signature_t nsignature;
-            bool assigned = false;
-            switch (ssignature.present)
-            {
-            case Signature_PR_ecdsaNistP256Signature:
-                nsignature = ssignature.choice.ecdsaNistP256Signature;
-                assigned = true;
-                break;
-            case Signature_PR_ecdsaBrainpoolP256r1Signature:
-                nsignature = ssignature.choice.ecdsaBrainpoolP256r1Signature;
-                assigned = true;
-                break;
-            case Signature_PR_ecdsaBrainpoolP384r1Signature:
-                //nsignature = ssignature.choice.ecdsaBrainpoolP384r1Signature;
-                //assigned = true;
-                break;
-            default:
-                break;
-            }
-
-            if (assigned){
-                signature.s = vanetza::asn1::OCTET_STRING_to_ByteBuffer(nsignature.sSig);
-                switch(nsignature.rSig.present){
-                    case EccP256CurvePoint_PR_x_only:
-                        signature.R = X_Coordinate_Only{
-                            .x=vanetza::asn1::OCTET_STRING_to_ByteBuffer(nsignature.rSig.choice.x_only)
-                        };
-                        break;
-                    case EccP256CurvePoint_PR_fill:
-                        break;
-                    case EccP256CurvePoint_PR_compressed_y_0:
-                        signature.R = Compressed_Lsb_Y_0{
-                            .x=vanetza::asn1::OCTET_STRING_to_ByteBuffer(nsignature.rSig.choice.compressed_y_0)
-                        };
-                        break;
-                    case EccP256CurvePoint_PR_compressed_y_1:
-                        signature.R = Compressed_Lsb_Y_1{
-                            .x=vanetza::asn1::OCTET_STRING_to_ByteBuffer(nsignature.rSig.choice.compressed_y_1)
-                        };
-                        break;
-                    case EccP256CurvePoint_PR_uncompressedP256:
-                        signature.R = Uncompressed{
-                            .x=vanetza::asn1::OCTET_STRING_to_ByteBuffer(nsignature.rSig.choice.uncompressedP256.x),
-                            .y=vanetza::asn1::OCTET_STRING_to_ByteBuffer(nsignature.rSig.choice.uncompressedP256.y)
-                        };
-                        break;
-                }
-                to_return = signature;
-            }
-        }
+vanetza::security::Signature SecuredMessageV3::get_signature() const
+{
+    if (!this->is_signed_message()) {
+        throw std::runtime_error("Message type is not signed");
     }
-    return to_return;
+
+    const Signature_t &signature = this->message->content->choice.signedData->signature;
+    const Signature_PR signature_type = signature.present;
+
+    vanetza::security::EcdsaSignature result;
+
+    const OCTET_STRING_t *sSig;
+    if (signature_type == Signature_PR_ecdsaNistP256Signature) {
+        result.R = vanetza::asn1::EccP256CurvePoint_to_EccPoint(signature.choice.ecdsaNistP256Signature.rSig);
+        sSig = &signature.choice.ecdsaNistP256Signature.sSig;
+    } else if (signature_type == Signature_PR_ecdsaBrainpoolP256r1Signature) {
+        result.R = vanetza::asn1::EccP256CurvePoint_to_EccPoint(signature.choice.ecdsaBrainpoolP256r1Signature.rSig);
+        sSig = &signature.choice.ecdsaBrainpoolP256r1Signature.sSig;
+    } else if (signature_type == Signature_PR_ecdsaBrainpoolP384r1Signature) {
+        result.R = vanetza::asn1::EccP384CurvePoint_to_EccPoint(signature.choice.ecdsaBrainpoolP384r1Signature.rSig);
+        sSig = &signature.choice.ecdsaBrainpoolP384r1Signature.sSig;
+    } else {
+        throw std::runtime_error("Unsupported signature type");
+    }
+    result.s = vanetza::asn1::OCTET_STRING_to_ByteBuffer(*sSig);
+
+    return result;
 }
 
 vanetza::ByteBuffer SecuredMessageV3::get_payload() const{
@@ -532,82 +501,59 @@ void SecuredMessageV3::set_external_payload_hash(const std::array<uint8_t, 32>& 
     );
 }
 
-void SecuredMessageV3::set_signature(const Signature& signature){
-    struct ecc_point_visitor : public boost::static_visitor<EccP256CurvePoint_t> {
-            EccP256CurvePoint_t operator()(const X_Coordinate_Only& x_only) const
-            {
-                EccP256CurvePoint_t* to_return = static_cast<EccP256CurvePoint_t*>(vanetza::asn1::allocate(sizeof(EccP256CurvePoint_t)));
-                to_return->present = EccP256CurvePoint_PR_x_only;
-                vanetza::asn1::convert_bytebuffer_to_octet_string(
-                    &(to_return->choice.x_only),
-                    x_only.x
-                );
-                return *to_return;
-            }
-
-            EccP256CurvePoint_t operator()(const Compressed_Lsb_Y_0& y0) const
-            {
-                EccP256CurvePoint_t* to_return = static_cast<EccP256CurvePoint_t*>(vanetza::asn1::allocate(sizeof(EccP256CurvePoint_t)));
-                to_return->present = EccP256CurvePoint_PR_compressed_y_0;
-                vanetza::asn1::convert_bytebuffer_to_octet_string(
-                    &(to_return->choice.compressed_y_0),
-                    y0.x
-                );
-                return *to_return;
-            }
-
-            EccP256CurvePoint_t operator()(const Compressed_Lsb_Y_1& y1) const
-            {
-                EccP256CurvePoint_t* to_return = static_cast<EccP256CurvePoint_t*>(vanetza::asn1::allocate(sizeof(EccP256CurvePoint_t)));
-                to_return->present = EccP256CurvePoint_PR_compressed_y_1;
-                vanetza::asn1::convert_bytebuffer_to_octet_string(
-                    &(to_return->choice.compressed_y_1),
-                    y1.x
-                );
-                return *to_return;
-            }
-
-            EccP256CurvePoint_t operator()(const Uncompressed& unc) const
-            {
-                EccP256CurvePoint_t* to_return = static_cast<EccP256CurvePoint_t*>(vanetza::asn1::allocate(sizeof(EccP256CurvePoint_t)));
-                to_return->present = EccP256CurvePoint_PR_uncompressedP256;
-                vanetza::asn1::convert_bytebuffer_to_octet_string(
-                    &(to_return->choice.uncompressedP256.x),
-                    unc.x
-                );
-                vanetza::asn1::convert_bytebuffer_to_octet_string(
-                    &(to_return->choice.uncompressedP256.y),
-                    unc.y
-                );
-                return *to_return;
-            }
-    };
-    struct signature_visitor : public boost::static_visitor<Signature_t>
+void SecuredMessageV3::set_signature(const Signature& signature, const std::string& curve_name){
+    struct signature_visitor : public boost::static_visitor<asn1::Signature>
         {
-            Signature_t operator()(const EcdsaSignature& signature) const
-            {
-                Signature_t* final_signature = static_cast<Signature_t*>(vanetza::asn1::allocate(sizeof(Signature_t)));
-                final_signature->present = Signature_PR_ecdsaNistP256Signature;
-                vanetza::asn1::convert_bytebuffer_to_octet_string(
-                    &(final_signature->choice.ecdsaNistP256Signature.sSig),
-                    signature.s
-                );
-                final_signature->choice.ecdsaNistP256Signature.rSig = boost::apply_visitor(
-                    ecc_point_visitor(),
-                    signature.R
-                );
-                return *final_signature;
-            }
+            Signature_PR signature_type;
 
-            Signature_t operator()(const EcdsaSignatureFuture& signature) const
+            explicit signature_visitor(const std::string& curve_name) {
+                if (curve_name == "prime256v1") {
+                    this->signature_type = Signature_PR_ecdsaNistP256Signature;
+                } else if (curve_name == "brainpoolP256r1") {
+                    this->signature_type = Signature_PR_ecdsaBrainpoolP256r1Signature;
+                } else if (curve_name == "brainpoolP384r1") {
+                    this->signature_type = Signature_PR_ecdsaBrainpoolP384r1Signature;
+                } else {
+                    throw std::invalid_argument("Unsupported curve name");
+                }
+            }
+            asn1::Signature operator()(const EcdsaSignature& signature) const
             {
-                Signature_t final_signature;
-                Signature temp = signature.get();
-                final_signature = boost::apply_visitor(signature_visitor(), temp);
+                asn1::Signature final_signature;
+                CHOICE_variant_set_presence(&asn_DEF_Signature, &(*final_signature), signature_type);
+
+                OCTET_STRING_t *sSig;
+                if (signature_type == Signature_PR_ecdsaNistP256Signature) {
+                    EcdsaP256Signature_t &ecdsa_p256_signature = final_signature->choice.ecdsaNistP256Signature;
+                    sSig = &ecdsa_p256_signature.sSig;
+                    asn1::EccP256CurvePoint rSig = asn1::EccPoint_to_EccP256CurvePoint(signature.R);
+                    std::swap(ecdsa_p256_signature.rSig, *rSig);
+                } else if (signature_type == Signature_PR_ecdsaBrainpoolP256r1Signature) {
+                    EcdsaP256Signature_t &ecdsa_p256_signature = final_signature->choice.ecdsaBrainpoolP256r1Signature;
+                    sSig = &ecdsa_p256_signature.sSig;
+                    asn1::EccP256CurvePoint rSig = asn1::EccPoint_to_EccP256CurvePoint(signature.R);
+                    std::swap(ecdsa_p256_signature.rSig, *rSig);
+                } else if (signature_type == Signature_PR_ecdsaBrainpoolP384r1Signature) {
+                    EcdsaP384Signature_t &ecdsa_p384_signature = final_signature->choice.ecdsaBrainpoolP384r1Signature;
+                    sSig = &ecdsa_p384_signature.sSig;
+                    asn1::EccP384CurvePoint rSig = asn1::EccPoint_to_EccP384CurvePoint(signature.R);
+                    std::swap(ecdsa_p384_signature.rSig, *rSig);
+                }
+
+                OCTET_STRING_fromBuf(
+                    sSig, reinterpret_cast<const char *>(signature.s.data()),
+                    signature.s.size());
+
                 return final_signature;
             }
+
+            asn1::Signature operator()(const EcdsaSignatureFuture& signature) const
+            {
+                return (*this)(signature.get());
+            }
         };
-    this->message->content->choice.signedData->signature = boost::apply_visitor(signature_visitor(), signature);
+        asn1::Signature asn1_signature = boost::apply_visitor(signature_visitor(curve_name), signature);
+        std::swap(this->message->content->choice.signedData->signature, *asn1_signature);
 }
 
 void SecuredMessageV3::set_signer_info(const SignerInfo& signer_info){

@@ -426,6 +426,7 @@ HashedId8 CertificateV3::get_issuer_identifier() const{
 	case IssuerIdentifier_PR_self:
         break;
 	case IssuerIdentifier_PR_sha384AndDigest:
+        to_return = vanetza::asn1::HashedId8_asn_to_HashedId8(this->certificate->issuer.choice.sha384AndDigest);
         break;
     default:
         break;
@@ -434,74 +435,25 @@ HashedId8 CertificateV3::get_issuer_identifier() const{
 }
 
 Signature CertificateV3::get_signature() const {
-    EcdsaSignature to_return;
-    std::unique_ptr<EccP256CurvePoint_t> eccP256;
-    switch (this->certificate->signature->present)
-    {
-    case Signature_PR_NOTHING:
-        break;
-	case Signature_PR_ecdsaNistP256Signature:
-        to_return.s = vanetza::asn1::OCTET_STRING_to_ByteBuffer(
-            this->certificate->signature->choice.ecdsaNistP256Signature.sSig
-        );
-        *eccP256 = this->certificate->signature->choice.ecdsaNistP256Signature.rSig;
-        break;
-	case Signature_PR_ecdsaBrainpoolP256r1Signature:
-        to_return.s = vanetza::asn1::OCTET_STRING_to_ByteBuffer(
-            this->certificate->signature->choice.ecdsaBrainpoolP256r1Signature.sSig
-        );
-        *eccP256 = this->certificate->signature->choice.ecdsaBrainpoolP256r1Signature.rSig;
-        break;
-	case Signature_PR_ecdsaBrainpoolP384r1Signature:
-        // TODO
-        break;
-    default:
-        break;
+    const Signature_t &signature = *this->certificate->signature;
+    const Signature_PR signature_type = signature.present;
+
+    vanetza::security::EcdsaSignature result;
+
+    if (signature_type == Signature_PR_ecdsaNistP256Signature) {
+        result.R = vanetza::asn1::EccP256CurvePoint_to_EccPoint(signature.choice.ecdsaNistP256Signature.rSig);
+        result.s = vanetza::asn1::OCTET_STRING_to_ByteBuffer(signature.choice.ecdsaNistP256Signature.sSig);
+    } else if (signature_type == Signature_PR_ecdsaBrainpoolP256r1Signature) {
+        result.R = vanetza::asn1::EccP256CurvePoint_to_EccPoint(signature.choice.ecdsaBrainpoolP256r1Signature.rSig);
+        result.s = vanetza::asn1::OCTET_STRING_to_ByteBuffer(signature.choice.ecdsaBrainpoolP256r1Signature.sSig);
+    } else if (signature_type == Signature_PR_ecdsaBrainpoolP384r1Signature) {
+        result.R = vanetza::asn1::EccP384CurvePoint_to_EccPoint(signature.choice.ecdsaBrainpoolP384r1Signature.rSig);
+        result.s = vanetza::asn1::OCTET_STRING_to_ByteBuffer(signature.choice.ecdsaBrainpoolP384r1Signature.sSig);
+    } else {
+        throw std::runtime_error("Unsupported signature type");
     }
-    if (eccP256){
-        switch (eccP256->present)
-        {
-        case EccP256CurvePoint_PR_NOTHING:
-            break;
-    	case EccP256CurvePoint_PR_x_only:
-            to_return.R = X_Coordinate_Only{
-                .x=vanetza::asn1::OCTET_STRING_to_ByteBuffer(
-                    eccP256->choice.x_only
-                )
-                };
-            break;
-    	case EccP256CurvePoint_PR_fill:
-            // Not covered case
-            break;
-    	case EccP256CurvePoint_PR_compressed_y_0:
-            to_return.R = Compressed_Lsb_Y_0{
-                .x=vanetza::asn1::OCTET_STRING_to_ByteBuffer(
-                    eccP256->choice.compressed_y_0
-                )
-            };
-            break;
-    	case EccP256CurvePoint_PR_compressed_y_1:
-            to_return.R = Compressed_Lsb_Y_1{
-                .x=vanetza::asn1::OCTET_STRING_to_ByteBuffer(
-                    eccP256->choice.compressed_y_1
-                )
-            };
-            break;
-    	case EccP256CurvePoint_PR_uncompressedP256:
-            to_return.R = Uncompressed{
-                .x=vanetza::asn1::OCTET_STRING_to_ByteBuffer(
-                    eccP256->choice.uncompressedP256.x
-                ),
-                .y=vanetza::asn1::OCTET_STRING_to_ByteBuffer(
-                    eccP256->choice.uncompressedP256.y
-                )
-            };
-            break;
-        default:
-            break;
-        }
-    }
-    return to_return;
+
+    return result;
 }
 
 std::shared_ptr<SubjectAssurance> CertificateV3::get_subject_assurance() const{
@@ -529,6 +481,10 @@ boost::optional<Uncompressed> CertificateV3::get_uncompressed_public_key(Backend
                 curve_name = "brainpoolP256r1";
                 ecc_point = vanetza::asn1::EccP256CurvePoint_to_EccPoint(this->certificate->toBeSigned.verifyKeyIndicator.choice.verificationKey.choice.ecdsaBrainpoolP256r1);
                 break;
+            case PublicVerificationKey_PR_ecdsaBrainpoolP384r1:
+                curve_name = "brainpoolP384r1";
+                ecc_point = vanetza::asn1::EccP384CurvePoint_to_EccPoint(this->certificate->toBeSigned.verifyKeyIndicator.choice.verificationKey.choice.ecdsaBrainpoolP384r1);
+                break;
             default:
                 return public_key_coordinates;
         }
@@ -548,6 +504,9 @@ boost::optional<std::string> CertificateV3::get_public_key_curve_name() const
                 break;
 	        case PublicVerificationKey_PR_ecdsaBrainpoolP256r1:
                 curve_name = "brainpoolP256r1";
+                break;
+            case PublicVerificationKey_PR_ecdsaBrainpoolP384r1:
+                curve_name = "brainpoolP384r1";
                 break;
         }
     }

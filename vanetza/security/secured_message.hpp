@@ -229,8 +229,9 @@ class SecuredMessageV3{
         /**
          * \brief Setter of the signature of the message
          * \param signature Signature
+         * \param curve_name Name of the curve used for the signature
          */
-        void set_signature(const Signature& signature);
+        void set_signature(const Signature& signature, const std::string &curve_name = "prime256v1");
         /**
          * \brief Setter of the signer info
          * \param signer_info Signer Info
