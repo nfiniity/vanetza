@@ -6,6 +6,7 @@
 #include <vanetza/security/basic_elements.hpp>
 #include <vanetza/security/region.hpp>
 #include <vanetza/asn1/security/EccP256CurvePoint.h>
+#include <vanetza/asn1/security/EccP384CurvePoint.h>
 #include <vanetza/asn1/security/GeographicRegion.h>
 #include <vanetza/asn1/security/TwoDLocation.h>
 #include <vanetza/asn1/security/HashedId8.h>
@@ -18,7 +19,7 @@ namespace asn1
 {
     /**
      * \brief Copies the content from ByteBuffer into OCTET_STRING
-     * 
+     *
      * \param octet Pointer to the OCTET_STRING
      * \param buffer ByteBuffer containing the info to be copied
      */
@@ -29,6 +30,24 @@ namespace asn1
      * \return Vanetza EccPoint
      */
     vanetza::security::EccPoint EccP256CurvePoint_to_EccPoint(const EccP256CurvePoint_t& curve_point);
+    /**
+     * \brief Convertor between Asn1c object to vanetza object (EccPoint)
+     * \param curve_point asn1c curve_point
+     * \return Vanetza EccPoint
+     */
+    vanetza::security::EccPoint EccP384CurvePoint_to_EccPoint(const EccP384CurvePoint_t& curve_point);
+    /**
+     * \brief Convertor between EccPoint to Asn1c EccP256CurvePoint_t
+     * \param curve_point asn1c curve_point
+     * \return Vanetza EccPoint
+     */
+    EccP256CurvePoint_t EccPoint_to_EccP256CurvePoint(const vanetza::security::EccPoint& ecc_point);
+    /**
+     * \brief Convertor between EccPoint to Asn1c EccP384CurvePoint_t
+     * \param curve_point asn1c curve_point
+     * \return Vanetza EccPoint
+     */
+    EccP384CurvePoint_t EccPoint_to_EccP384CurvePoint(const vanetza::security::EccPoint& ecc_point);
     /**
      * \brief Convertor between Asn1c object to vanetza object (GeographicRegion)
      * \param curve_point asn1c GeographicRegion
