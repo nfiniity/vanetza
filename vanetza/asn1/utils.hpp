@@ -1,7 +1,6 @@
 #ifndef UTILS_HPP_XGC8NRDI
 #define UTILS_HPP_XGC8NRDI
 #include <vanetza/common/byte_buffer.hpp>
-#include <vanetza/asn1/support/OCTET_STRING.h>
 #include <vanetza/security/ecc_point.hpp>
 #include <vanetza/security/basic_elements.hpp>
 #include <vanetza/security/region.hpp>
@@ -11,6 +10,7 @@
 #include <vanetza/asn1/security/TwoDLocation.h>
 #include <vanetza/asn1/security/HashedId8.h>
 #include <vanetza/asn1/security/HashedId3.h>
+#include <vanetza/asn1/ecc_curve_point.hpp>
 
 
 namespace vanetza
@@ -37,17 +37,17 @@ namespace asn1
      */
     vanetza::security::EccPoint EccP384CurvePoint_to_EccPoint(const EccP384CurvePoint_t& curve_point);
     /**
-     * \brief Convertor between EccPoint to Asn1c EccP256CurvePoint_t
+     * \brief Convertor between EccPoint to Asn1c EccP256CurvePoint
      * \param curve_point asn1c curve_point
      * \return Vanetza EccPoint
      */
-    EccP256CurvePoint_t EccPoint_to_EccP256CurvePoint(const vanetza::security::EccPoint& ecc_point);
+    asn1::EccP256CurvePoint EccPoint_to_EccP256CurvePoint(const vanetza::security::EccPoint& ecc_point);
     /**
-     * \brief Convertor between EccPoint to Asn1c EccP384CurvePoint_t
+     * \brief Convertor between EccPoint to Asn1c EccP384CurvePoint
      * \param curve_point asn1c curve_point
      * \return Vanetza EccPoint
      */
-    EccP384CurvePoint_t EccPoint_to_EccP384CurvePoint(const vanetza::security::EccPoint& ecc_point);
+    asn1::EccP384CurvePoint EccPoint_to_EccP384CurvePoint(const vanetza::security::EccPoint& ecc_point);
     /**
      * \brief Convertor between Asn1c object to vanetza object (GeographicRegion)
      * \param curve_point asn1c GeographicRegion

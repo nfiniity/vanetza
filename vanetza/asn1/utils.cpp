@@ -68,31 +68,31 @@ vanetza::security::EccPoint EccP384CurvePoint_to_EccPoint(const EccP384CurvePoin
     return to_return;
 }
 
-EccP256CurvePoint_t EccPoint_to_EccP256CurvePoint(const vanetza::security::EccPoint& ecc_point){
-    struct EccPointVisitor : public boost::static_visitor<EccP256CurvePoint_t> {
-        EccP256CurvePoint_t operator()(const vanetza::security::X_Coordinate_Only& x_only) const {
-            EccP256CurvePoint_t to_return;
-            CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &to_return, EccP256CurvePoint_PR_x_only);
-            OCTET_STRING_fromBuf(&to_return.choice.x_only, reinterpret_cast<const char *>(x_only.x.data()), x_only.x.size());
+asn1::EccP256CurvePoint EccPoint_to_EccP256CurvePoint(const vanetza::security::EccPoint& ecc_point){
+    struct EccPointVisitor : public boost::static_visitor<asn1::EccP256CurvePoint> {
+        asn1::EccP256CurvePoint operator()(const vanetza::security::X_Coordinate_Only& x_only) const {
+            asn1::EccP256CurvePoint to_return;
+            CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &(*to_return), EccP256CurvePoint_PR_x_only);
+            OCTET_STRING_fromBuf(&to_return->choice.x_only, reinterpret_cast<const char *>(x_only.x.data()), x_only.x.size());
             return to_return;
         }
-        EccP256CurvePoint_t operator()(const vanetza::security::Compressed_Lsb_Y_0& compressed_y_0) const {
-            EccP256CurvePoint_t to_return;
-            CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &to_return, EccP256CurvePoint_PR_compressed_y_0);
-            OCTET_STRING_fromBuf(&to_return.choice.compressed_y_0, reinterpret_cast<const char *>(compressed_y_0.x.data()), compressed_y_0.x.size());
+        asn1::EccP256CurvePoint operator()(const vanetza::security::Compressed_Lsb_Y_0& compressed_y_0) const {
+            asn1::EccP256CurvePoint to_return;
+            CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &(*to_return), EccP256CurvePoint_PR_compressed_y_0);
+            OCTET_STRING_fromBuf(&to_return->choice.compressed_y_0, reinterpret_cast<const char *>(compressed_y_0.x.data()), compressed_y_0.x.size());
             return to_return;
         }
-        EccP256CurvePoint_t operator()(const vanetza::security::Compressed_Lsb_Y_1& compressed_y_1) const {
-            EccP256CurvePoint_t to_return;
-            CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &to_return, EccP256CurvePoint_PR_compressed_y_1);
-            OCTET_STRING_fromBuf(&to_return.choice.compressed_y_1, reinterpret_cast<const char *>(compressed_y_1.x.data()), compressed_y_1.x.size());
+        asn1::EccP256CurvePoint operator()(const vanetza::security::Compressed_Lsb_Y_1& compressed_y_1) const {
+            asn1::EccP256CurvePoint to_return;
+            CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &(*to_return), EccP256CurvePoint_PR_compressed_y_1);
+            OCTET_STRING_fromBuf(&to_return->choice.compressed_y_1, reinterpret_cast<const char *>(compressed_y_1.x.data()), compressed_y_1.x.size());
             return to_return;
         }
-        EccP256CurvePoint_t operator()(const vanetza::security::Uncompressed& uncompressed) const {
-            EccP256CurvePoint_t to_return;
-            CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &to_return, EccP256CurvePoint_PR_uncompressedP256);
-            OCTET_STRING_fromBuf(&to_return.choice.uncompressedP256.x, reinterpret_cast<const char *>(uncompressed.x.data()), uncompressed.x.size());
-            OCTET_STRING_fromBuf(&to_return.choice.uncompressedP256.y, reinterpret_cast<const char *>(uncompressed.y.data()), uncompressed.y.size());
+        asn1::EccP256CurvePoint operator()(const vanetza::security::Uncompressed& uncompressed) const {
+            asn1::EccP256CurvePoint to_return;
+            CHOICE_variant_set_presence(&asn_DEF_EccP256CurvePoint, &(*to_return), EccP256CurvePoint_PR_uncompressedP256);
+            OCTET_STRING_fromBuf(&to_return->choice.uncompressedP256.x, reinterpret_cast<const char *>(uncompressed.x.data()), uncompressed.x.size());
+            OCTET_STRING_fromBuf(&to_return->choice.uncompressedP256.y, reinterpret_cast<const char *>(uncompressed.y.data()), uncompressed.y.size());
             return to_return;
         }
     };
@@ -100,31 +100,31 @@ EccP256CurvePoint_t EccPoint_to_EccP256CurvePoint(const vanetza::security::EccPo
     return boost::apply_visitor(EccPointVisitor(), ecc_point);
 }
 
-EccP384CurvePoint_t EccPoint_to_EccP384CurvePoint(const vanetza::security::EccPoint& ecc_point){
-    struct EccPointVisitor : public boost::static_visitor<EccP384CurvePoint_t> {
-        EccP384CurvePoint_t operator()(const vanetza::security::X_Coordinate_Only& x_only) const {
-            EccP384CurvePoint_t to_return;
-            CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &to_return, EccP384CurvePoint_PR_x_only);
-            OCTET_STRING_fromBuf(&to_return.choice.x_only, reinterpret_cast<const char *>(x_only.x.data()), x_only.x.size());
+asn1::EccP384CurvePoint EccPoint_to_EccP384CurvePoint(const vanetza::security::EccPoint& ecc_point){
+    struct EccPointVisitor : public boost::static_visitor<asn1::EccP384CurvePoint> {
+        asn1::EccP384CurvePoint operator()(const vanetza::security::X_Coordinate_Only& x_only) const {
+            asn1::EccP384CurvePoint to_return;
+            CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &(*to_return), EccP384CurvePoint_PR_x_only);
+            OCTET_STRING_fromBuf(&to_return->choice.x_only, reinterpret_cast<const char *>(x_only.x.data()), x_only.x.size());
             return to_return;
         }
-        EccP384CurvePoint_t operator()(const vanetza::security::Compressed_Lsb_Y_0& compressed_y_0) const {
-            EccP384CurvePoint_t to_return;
-            CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &to_return, EccP384CurvePoint_PR_compressed_y_0);
-            OCTET_STRING_fromBuf(&to_return.choice.compressed_y_0, reinterpret_cast<const char *>(compressed_y_0.x.data()), compressed_y_0.x.size());
+        asn1::EccP384CurvePoint operator()(const vanetza::security::Compressed_Lsb_Y_0& compressed_y_0) const {
+            asn1::EccP384CurvePoint to_return;
+            CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &(*to_return), EccP384CurvePoint_PR_compressed_y_0);
+            OCTET_STRING_fromBuf(&to_return->choice.compressed_y_0, reinterpret_cast<const char *>(compressed_y_0.x.data()), compressed_y_0.x.size());
             return to_return;
         }
-        EccP384CurvePoint_t operator()(const vanetza::security::Compressed_Lsb_Y_1& compressed_y_1) const {
-            EccP384CurvePoint_t to_return;
-            CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &to_return, EccP384CurvePoint_PR_compressed_y_1);
-            OCTET_STRING_fromBuf(&to_return.choice.compressed_y_1, reinterpret_cast<const char *>(compressed_y_1.x.data()), compressed_y_1.x.size());
+        asn1::EccP384CurvePoint operator()(const vanetza::security::Compressed_Lsb_Y_1& compressed_y_1) const {
+            asn1::EccP384CurvePoint to_return;
+            CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &(*to_return), EccP384CurvePoint_PR_compressed_y_1);
+            OCTET_STRING_fromBuf(&to_return->choice.compressed_y_1, reinterpret_cast<const char *>(compressed_y_1.x.data()), compressed_y_1.x.size());
             return to_return;
         }
-        EccP384CurvePoint_t operator()(const vanetza::security::Uncompressed& uncompressed) const {
-            EccP384CurvePoint_t to_return;
-            CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &to_return, EccP384CurvePoint_PR_uncompressedP384);
-            OCTET_STRING_fromBuf(&to_return.choice.uncompressedP384.x, reinterpret_cast<const char *>(uncompressed.x.data()), uncompressed.x.size());
-            OCTET_STRING_fromBuf(&to_return.choice.uncompressedP384.y, reinterpret_cast<const char *>(uncompressed.y.data()), uncompressed.y.size());
+        asn1::EccP384CurvePoint operator()(const vanetza::security::Uncompressed& uncompressed) const {
+            asn1::EccP384CurvePoint to_return;
+            CHOICE_variant_set_presence(&asn_DEF_EccP384CurvePoint, &(*to_return), EccP384CurvePoint_PR_uncompressedP384);
+            OCTET_STRING_fromBuf(&to_return->choice.uncompressedP384.x, reinterpret_cast<const char *>(uncompressed.x.data()), uncompressed.x.size());
+            OCTET_STRING_fromBuf(&to_return->choice.uncompressedP384.y, reinterpret_cast<const char *>(uncompressed.y.data()), uncompressed.y.size());
             return to_return;
         }
     };
