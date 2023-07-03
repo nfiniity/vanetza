@@ -19,7 +19,10 @@ BackendCryptoPP::BackendCryptoPP() :
 {
 }
 
-EcdsaSignature BackendCryptoPP::sign_data(const ecdsa256::PrivateKey& generic_key, const ByteBuffer& data)
+EcdsaSignature
+BackendCryptoPP::sign_data(const ecdsa256::PrivateKey &generic_key,
+                           const ByteBuffer &data,
+                           const std::string &curve_name)
 {
     return sign_data(m_private_cache[generic_key], data);
 }
@@ -47,8 +50,10 @@ EcdsaSignature BackendCryptoPP::sign_data(const PrivateKey& private_key, const B
     return ecdsa_signature;
 }
 
-bool BackendCryptoPP::verify_data(const ecdsa256::PublicKey& generic_key, const ByteBuffer& msg, const EcdsaSignature& sig)
-{
+bool BackendCryptoPP::verify_data(const ecdsa256::PublicKey &generic_key,
+                                  const ByteBuffer &msg,
+                                  const EcdsaSignature &sig,
+                                  const std::string &curve_name) {
     const ByteBuffer sigbuf = extract_signature_buffer(sig);
     return verify_data(m_public_cache[generic_key], msg, sigbuf);
 }
@@ -69,6 +74,8 @@ boost::optional<Uncompressed> BackendCryptoPP::decompress_point(const EccPoint& 
                 this->group = CryptoPP::ASN1::secp256r1();
             } else if (curve_name == "brainpoolP256r1") {
                 this->group = CryptoPP::ASN1::brainpoolP256r1();
+            } else if (curve_name == "brainpoolP384r1") {
+                this->group = CryptoPP::ASN1::brainpoolP384r1();
             } else {
                 throw std::invalid_argument("Unsupported curve name");
             }

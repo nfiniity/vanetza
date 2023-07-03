@@ -25,29 +25,36 @@ public:
      *
      * \param private_key Secret private key
      * \param data buffer with plaintext data
+     * \param curve_name name of elliptic curve
      * \return calculated signature
      */
-    virtual EcdsaSignature sign_data(const ecdsa256::PrivateKey& private_key, const ByteBuffer& data) = 0;
+  virtual EcdsaSignature
+  sign_data(const ecdsa256::PrivateKey &private_key, const ByteBuffer &data,
+            const std::string &curve_name = "prime256v1") = 0;
 
-    /**
-     * \brief try to verify data using public key and signature
-     *
-     * \param public_key Public key
-     * \param data plaintext
-     * \param sig signature of data
-     * \return true if the data could be verified
-     */
-    virtual bool verify_data(const ecdsa256::PublicKey& public_key, const ByteBuffer& data, const EcdsaSignature& sig) = 0;
+  /**
+   * \brief try to verify data using public key and signature
+   *
+   * \param public_key Public key
+   * \param data plaintext
+   * \param sig signature of data
+   * \return true if the data could be verified
+   */
+  virtual bool verify_data(const ecdsa256::PublicKey &public_key,
+                           const ByteBuffer &data, const EcdsaSignature &sig,
+                           const std::string &curve_name = "prime256v1") = 0;
 
-    /**
-     * \brief decompress a possibly compressed elliptic curve point
-     *
-     * \param ecc_point elliptic curve point
-     * \return uncompressed point
-     */
-    virtual boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point, const std::string& curve_name = "prime256v1") = 0;
+  /**
+   * \brief decompress a possibly compressed elliptic curve point
+   *
+   * \param ecc_point elliptic curve point
+   * \return uncompressed point
+   */
+  virtual boost::optional<Uncompressed>
+  decompress_point(const EccPoint &ecc_point,
+                   const std::string &curve_name = "prime256v1") = 0;
 
-    virtual ~Backend() = default;
+  virtual ~Backend() = default;
 };
 
 /**

@@ -45,7 +45,10 @@ public:
     BackendOpenSsl();
 
     /// \see Backend::sign_data
-    EcdsaSignature sign_data(const ecdsa256::PrivateKey& private_key, const ByteBuffer& data_buffer) override;
+    EcdsaSignature
+    sign_data(const ecdsa256::PrivateKey &private_key,
+              const ByteBuffer &data_buffer,
+              const std::string &curve_name = "prime256v1") override;
 
     /*
      * Encrypt data using ECIES with AES-128-CCM and SHA256-HMAC
@@ -65,7 +68,9 @@ public:
                                        const std::array<uint8_t, 16> &aes_key, openssl::EvpKey &ephemeral_key) const;
 
     /// \see Backend::verify_data
-    bool verify_data(const ecdsa256::PublicKey& public_key, const ByteBuffer& data, const EcdsaSignature& sig) override;
+    bool verify_data(const ecdsa256::PublicKey &public_key,
+                     const ByteBuffer &data, const EcdsaSignature &sig,
+                     const std::string &curve_name = "prime256v1") override;
 
     /// \see Backend::decompress_point
     boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point, const std::string& curve_name = "prime256v1") override;

@@ -20,10 +20,15 @@ public:
     static constexpr auto backend_name = "Null";
 
     /// \see Backend::sign_data
-    EcdsaSignature sign_data(const ecdsa256::PrivateKey& private_key, const ByteBuffer& data_buffer) override;
+    EcdsaSignature
+    sign_data(const ecdsa256::PrivateKey &private_key,
+              const ByteBuffer &data_buffer,
+              const std::string &curve_name = "prime256v1") override;
 
     /// \see Backend::verify_data
-    bool verify_data(const ecdsa256::PublicKey& public_key, const ByteBuffer& data, const EcdsaSignature& sig) override;
+    bool verify_data(const ecdsa256::PublicKey &public_key,
+                     const ByteBuffer &data, const EcdsaSignature &sig,
+                     const std::string &curve_name = "prime256v1") override;
 
     /// \see Backend::decompress_point
     boost::optional<Uncompressed> decompress_point(const EccPoint& ecc_point, const std::string& curve_name = "prime256v1") override;

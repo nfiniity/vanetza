@@ -27,43 +27,39 @@ BackendOpenSsl::BackendOpenSsl()
 #endif
 }
 
-EcdsaSignature BackendOpenSsl::sign_data(const ecdsa256::PrivateKey& key, const ByteBuffer& data)
+EcdsaSignature BackendOpenSsl::sign_data(const ecdsa256::PrivateKey &key,
+                                         const ByteBuffer &data,
+                                         const std::string &curve_name)
 {
-    auto priv_key = internal_private_key(key);
-    auto digest = calculate_digest(data);
+    openssl::EvpKey priv_key(curve_name, key);
 
-    // sign message data represented by the digest
-    openssl::Signature signature { ECDSA_do_sign(digest.data(), digest.size(), priv_key) };
-#if OPENSSL_API_COMPAT < 0x10100000L
-    const BIGNUM* sig_r = signature->r;
-    const BIGNUM* sig_s = signature->s;
-#else
-    const BIGNUM* sig_r = nullptr;
-    const BIGNUM* sig_s = nullptr;
-    ECDSA_SIG_get0(signature, &sig_r, &sig_s);
-#endif
-
-    EcdsaSignature ecdsa_signature;
-    X_Coordinate_Only coordinate;
-
-    if (sig_r && sig_s) {
-        const size_t len = field_size(PublicKeyAlgorithm::ECDSA_NISTP256_With_SHA256);
-
-        const auto num_bytes_s = BN_num_bytes(sig_s);
-        assert(len >= static_cast<size_t>(num_bytes_s));
-        ecdsa_signature.s.resize(len, 0x00);
-        BN_bn2bin(sig_s, ecdsa_signature.s.data() + len - num_bytes_s);
-
-        const auto num_bytes_r = BN_num_bytes(sig_r);
-        assert(len >= static_cast<size_t>(num_bytes_r));
-        coordinate.x.resize(len, 0x00);
-        BN_bn2bin(sig_r, coordinate.x.data() + len - num_bytes_r);
+    // Set up signing context
+    std::string digest_name;
+    if (curve_name == "prime256v1" || curve_name == "brainpoolP256r1") {
+        digest_name = "SHA256";
+    } else if (curve_name == "brainpoolP384r1") {
+        digest_name = "SHA384";
     } else {
-        throw openssl::Exception();
+        throw std::runtime_error("Unsupported curve name");
     }
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    openssl::check(nullptr != ctx &&
+                   1 == EVP_DigestSignInit_ex(ctx, nullptr, digest_name.data(), nullptr, nullptr, priv_key, nullptr));
 
-    ecdsa_signature.R = std::move(coordinate);
-    return ecdsa_signature;
+    // Get required buffer size
+    size_t sig_len;
+    openssl::check(1 == EVP_DigestSign(ctx, nullptr, &sig_len, data.data(), data.size()));
+    // Sign data
+    ByteBuffer sig_buf(sig_len);
+    openssl::check(1 == EVP_DigestSign(ctx, sig_buf.data(), &sig_len, data.data(), data.size()));
+
+    EVP_MD_CTX_free(ctx);
+
+    // Convert OpenSSL signature to EcdsaSignature
+    const unsigned char *sig_ptr = sig_buf.data();
+    ECDSA_SIG *ecdsa_sig = d2i_ECDSA_SIG(nullptr, &sig_ptr, sig_len);
+    openssl::check(ecdsa_sig != nullptr);
+    return openssl::Signature(ecdsa_sig).ecdsa_signature();
 }
 
 EciesEncryptionResult BackendOpenSsl::encrypt_data(
@@ -116,13 +112,40 @@ EciesEncryptionResult BackendOpenSsl::encrypt_data(
     return result;
 }
 
-bool BackendOpenSsl::verify_data(const ecdsa256::PublicKey& key, const ByteBuffer& data, const EcdsaSignature& sig)
-{
-    auto digest = calculate_digest(data);
-    auto pub = internal_public_key(key);
-    openssl::Signature signature(sig);
+bool BackendOpenSsl::verify_data(const ecdsa256::PublicKey &key,
+                                 const ByteBuffer &data,
+                                 const EcdsaSignature &sig,
+                                 const std::string &curve_name) {
+    // Prepare public key
+    openssl::EvpKey pub_key(curve_name, boost::none, key);
 
-    return (ECDSA_do_verify(digest.data(), digest.size(), signature, pub) == 1);
+    // Configure verification parameters
+    std::string digest_name;
+    if (curve_name == "prime256v1" || curve_name == "brainpoolP256r1") {
+        digest_name = "SHA256";
+    } else if (curve_name == "brainpoolP384r1") {
+        digest_name = "SHA384";
+    } else {
+        throw std::runtime_error("Unsupported curve name");
+    }
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    openssl::check(nullptr != ctx &&
+                   1 == EVP_DigestVerifyInit_ex(ctx, nullptr, digest_name.data(), nullptr, nullptr, pub_key, nullptr));
+
+    // Convert signature to ASN.1 format
+    openssl::Signature asn1_sig(sig);
+    unsigned char *asn1_sig_encoded = nullptr;
+    int asn1_sig_encoded_len = i2d_ECDSA_SIG(asn1_sig, &asn1_sig_encoded);
+    openssl::check(asn1_sig_encoded_len > 0);
+
+    // Verify signature
+    int res = EVP_DigestVerify(ctx, asn1_sig_encoded, asn1_sig_encoded_len, data.data(), data.size());
+    // Values smaller than 0 indicate an error
+    openssl::check(res >= 0);
+
+    EVP_MD_CTX_free(ctx);
+
+    return res == 1;
 }
 
 boost::optional<Uncompressed> BackendOpenSsl::decompress_point(const EccPoint& ecc_point, const std::string& curve_name)
@@ -135,6 +158,8 @@ boost::optional<Uncompressed> BackendOpenSsl::decompress_point(const EccPoint& e
                 curve = NID_X9_62_prime256v1;
             } else if (curve_name == "brainpoolP256r1") {
                 curve = NID_brainpoolP256r1;
+            } else if (curve_name == "brainpoolP384r1") {
+                curve = NID_brainpoolP384r1;
             } else {
                 throw std::invalid_argument("Unsupported curve name");
             }
@@ -430,6 +455,7 @@ std::array<uint8_t, 16> BackendOpenSsl::hmac_sha256(const ByteBuffer &key,
                                                     const ByteBuffer &data) const
 {
     EVP_MD *digest = EVP_MD_fetch(nullptr, "SHA256", nullptr);
+    openssl::check(nullptr != digest);
 
     std::array<uint8_t, 32> tmp;
     unsigned int hmac_len;

@@ -96,21 +96,36 @@ Signature::Signature(ECDSA_SIG* sig) : signature(sig)
 Signature::Signature(const EcdsaSignature& ecdsa) : signature(ECDSA_SIG_new())
 {
     check(signature);
-#if OPENSSL_API_COMPAT < 0x10100000L
-    const ByteBuffer r = convert_for_signing(ecdsa.R);
-    BN_bin2bn(r.data(), r.size(), signature->r);
-    BN_bin2bn(ecdsa.s.data(), ecdsa.s.size(), signature->s);
-#else
+
     BigNumber bn_r { convert_for_signing(ecdsa.R) };
     BigNumber bn_s { ecdsa.s };
     // ownership of big numbers is transfered by calling ECDSA_SIG_set0!
     ECDSA_SIG_set0(signature, bn_r.move(), bn_s.move());
-#endif
 }
 
 Signature::~Signature()
 {
     ECDSA_SIG_free(signature);
+}
+
+EcdsaSignature Signature::ecdsa_signature() const
+{
+    const BIGNUM* sig_r = nullptr;
+    const BIGNUM* sig_s = nullptr;
+    ECDSA_SIG_get0(signature, &sig_r, &sig_s);
+    openssl::check(sig_r && sig_s);
+
+    EcdsaSignature ecdsa_signature;
+    X_Coordinate_Only coordinate;
+
+    ecdsa_signature.s.resize(BN_num_bytes(sig_s));
+    BN_bn2bin(sig_s, ecdsa_signature.s.data());
+
+    coordinate.x.resize(BN_num_bytes(sig_r));
+    BN_bn2bin(sig_r, coordinate.x.data());
+    ecdsa_signature.R = std::move(coordinate);
+
+    return ecdsa_signature;
 }
 
 Key::Key() : eckey(EC_KEY_new())

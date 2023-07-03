@@ -117,6 +117,8 @@ public:
     explicit Signature(const EcdsaSignature& sig);
     ~Signature();
 
+    EcdsaSignature ecdsa_signature() const;
+
     operator const ECDSA_SIG*() { return signature; }
     const ECDSA_SIG* operator->() const { return signature; }
     ECDSA_SIG* operator->() { return signature; }

@@ -8,13 +8,13 @@ namespace vanetza
 namespace security
 {
 
-EcdsaSignature BackendNull::sign_data(const ecdsa256::PrivateKey&, const ByteBuffer&)
+EcdsaSignature BackendNull::sign_data(const ecdsa256::PrivateKey&, const ByteBuffer&, const std::string&)
 {
     static const EcdsaSignature fake = fake_signature();
     return fake;
 }
 
-bool BackendNull::verify_data(const ecdsa256::PublicKey&, const ByteBuffer&, const EcdsaSignature&)
+bool BackendNull::verify_data(const ecdsa256::PublicKey&, const ByteBuffer&, const EcdsaSignature&, const std::string&)
 {
     // accept everything
     return true;
