@@ -516,8 +516,8 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
             return confirm;
         }
 
-        ByteBuffer signature_input = calculate_sha_signature_inputV3(payload, certificateV3);
-        if (backend.verify_data(public_key.get(), signature_input, *ecdsa, *curve_name)) {
+        ByteBuffer signature_input = calculate_sha_signature_inputV3(payload, certificateV3, *curve_name);
+        if (backend.verify_data(*public_key, signature_input, *ecdsa, *curve_name)) {
             signer = cert;
             break;
         }

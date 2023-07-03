@@ -51,20 +51,35 @@ Sha384Digest calculate_sha384_digest(const uint8_t* data, std::size_t len)
 
 
 // Adjust all references to this
-ByteBuffer calculate_sha_signature_inputV3(const ByteBuffer& tbs_data, const CertificateV3& certificate)
+ByteBuffer calculate_sha_signature_inputV3(const ByteBuffer &tbs_data,
+                                           const CertificateV3 &certificate,
+                                           const std::string &curve_name)
 {
-    // Calculate tbs_data digest
-    Sha256Digest tbs_data_digest = calculate_sha256_digest(tbs_data.data(), tbs_data.size());
-
     // Check is the certificate is self-signed
     bool self_signed = certificate.get_issuer_identifier() == HashedId8{{0, 0, 0, 0, 0, 0, 0, 0}};
-
-    // Calculate the digest of the signer
-    ByteBuffer signer_buffer {};
+    ByteBuffer signer_data {};
     if (!self_signed) {
-        signer_buffer = certificate.serialize();
+        signer_data = certificate.serialize();
     }
-    Sha256Digest signer_digest = calculate_sha256_digest(signer_buffer.data(), signer_buffer.size());
+
+    // Calculate tbs_data and signer digests
+    ByteBuffer signer_digest;
+    ByteBuffer tbs_data_digest;
+    if (curve_name == "prime256v1" || curve_name == "brainpoolP256r1") {
+        auto signer_digest_array = calculate_sha256_digest(signer_data.data(), signer_data.size());
+        signer_digest = ByteBuffer(signer_digest_array.begin(), signer_digest_array.end());
+
+        auto tbs_data_digest_array = calculate_sha256_digest(tbs_data.data(), tbs_data.size());
+        tbs_data_digest = ByteBuffer(tbs_data_digest_array.begin(), tbs_data_digest_array.end());
+    } else if (curve_name == "brainpoolP384r1") {
+        auto signer_digest_array = calculate_sha384_digest(signer_data.data(), signer_data.size());
+        signer_digest = ByteBuffer(signer_digest_array.begin(), signer_digest_array.end());
+
+        auto tbs_data_digest_array = calculate_sha384_digest(tbs_data.data(), tbs_data.size());
+        tbs_data_digest = ByteBuffer(tbs_data_digest_array.begin(), tbs_data_digest_array.end());
+    } else {
+        throw std::runtime_error("Unsupported curve name");
+    }
 
     // Concatenate the two digests
     ByteBuffer result(tbs_data_digest.size() + signer_digest.size());

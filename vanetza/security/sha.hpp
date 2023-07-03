@@ -24,7 +24,9 @@ Sha384Digest calculate_sha384_digest(const uint8_t* data, std::size_t len);
  *  This is used as the data for sign_data in the backend.
  *  Defined in IEEE 1609.2 2022, Section 5.3.1.2.2
  */
-ByteBuffer calculate_sha_signature_inputV3(const ByteBuffer& tbs_data, const CertificateV3& certificate);
+ByteBuffer calculate_sha_signature_inputV3(const ByteBuffer &tbs_data,
+                                           const CertificateV3 &certificate,
+                                           const std::string &curve_name);
 
 } // namespace security
 } // namespace vanetza
