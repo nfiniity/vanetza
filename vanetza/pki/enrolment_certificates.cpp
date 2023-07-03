@@ -21,19 +21,23 @@ namespace vanetza {
 namespace pki {
 
 security::EncryptConfirm
-build_enrolment_request(const std::string &its_id,
-                       const security::openssl::EvpKey &verification_key,
-                       security::CertificateProvider& active_certificate_provider,
-                       const security::CertificateV3& target_certificate,
-                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
+build_enrolment_request(const ByteBuffer &its_id,
+                        const security::openssl::EvpKey &verification_key,
+                        security::CertificateProvider& active_certificate_provider,
+                        const security::CertificateV3& ea_certificate,
+                        const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list,
+                        const std::string& verification_key_curve_name)
 {
     // Build inner EC request with itsId, verificationKey and subject attributes
     asn1::InnerEcRequest inner_ec_request = build_inner_ec_request(its_id, verification_key, psid_ssp_list);
     auto tmp = inner_ec_request.encode();
 
     // Sign inner EC request with verification key for proof of possession
+    security::SelfCertificateProvider verification_certificate_provider(verification_key.private_key(), verification_key_curve_name);
     security::SecuredMessageV3 inner_ec_request_signed_for_pop_message =
-        sign_inner_ec_request(std::move(inner_ec_request), verification_key);
+        sign_ec_request_data(std::move(inner_ec_request),
+                             verification_certificate_provider,
+                             security::PayloadTypeV3::RawUnsecured);
     ByteBuffer inner_ec_request_signed_for_pop_bb = inner_ec_request_signed_for_pop_message.serialize();
     // Decode into a temporary object
     InnerEcRequestSignedForPop_t *tmp_inner_ec_request_signed_for_pop = nullptr;
@@ -66,32 +70,22 @@ build_enrolment_request(const std::string &its_id,
 
     // Encryption
     security::EncryptConfirm encrypted_ec_request =
-        encrypt_ec_request(std::move(signed_outer_ec_request), target_certificate);
+        encrypt_ec_request(std::move(signed_outer_ec_request), ea_certificate);
 
     return encrypted_ec_request;
 }
 
-security::EncryptConfirm
-build_enrolment_request(const std::string &its_id,
-                       const security::openssl::EvpKey &verification_key,
-                       const security::openssl::EvpKey &canonical_key,
-                       const security::CertificateV3 &target_certificate,
-                       const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
-{
-    security::SelfCertificateProvider canonical_key_provider(canonical_key.private_key());
-    return build_enrolment_request(its_id, verification_key, canonical_key_provider, target_certificate, psid_ssp_list);
-}
-
 asn1::InnerEcRequest
-build_inner_ec_request(const std::string &its_id,
+build_inner_ec_request(const ByteBuffer &its_id,
                        const security::openssl::EvpKey &verification_key,
                        const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
 {
     asn1::InnerEcRequest inner_ec_request;
     inner_ec_request->certificateFormat = CertificateFormat_ts103097v131;
-    OCTET_STRING_fromString(&inner_ec_request->itsId, its_id.data());
+    OCTET_STRING_fromBuf(&inner_ec_request->itsId,
+                         reinterpret_cast<const char *>(its_id.data()),
+                         its_id.size());
     set_public_verification_key(inner_ec_request, verification_key);
-    set_certificate_subject_attributes(inner_ec_request, its_id);
     if (psid_ssp_list) set_psid_ssps(inner_ec_request, *psid_ssp_list);
 
     return inner_ec_request;
@@ -101,14 +95,6 @@ void set_public_verification_key(asn1::InnerEcRequest& inner_ec_request, const s
 {
     asn1::PublicVerificationKey public_verification_key = verification_key.public_verification_key();
     std::swap(inner_ec_request->publicKeys.verificationKey, *public_verification_key);
-}
-
-void set_certificate_subject_attributes(asn1::InnerEcRequest& inner_ec_request, const std::string& its_id)
-{
-    // id is optional, we need to initialize it first
-    inner_ec_request->requestedSubjectAttributes.id = asn1::allocate<CertificateId_t>();
-    inner_ec_request->requestedSubjectAttributes.id->present = CertificateId_PR_name;
-    OCTET_STRING_fromString(&inner_ec_request->requestedSubjectAttributes.id->choice.name, its_id.data());
 }
 
 void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const asn1::SequenceOfPsidSsp& psid_ssp_list)
@@ -143,18 +129,8 @@ sign_ec_request_data(ByteBufferConvertible &&request_data,
     return boost::get<security::SecuredMessageV3>(sign_confirm.secured_message);
 }
 
-security::SecuredMessageV3
-sign_inner_ec_request(asn1::InnerEcRequest &&inner_ec_request,
-                      const security::openssl::EvpKey &verification_key)
-{
-    security::SelfCertificateProvider verification_key_provider(verification_key.private_key());
-    return sign_ec_request_data(std::move(inner_ec_request),
-                                verification_key_provider,
-                                security::PayloadTypeV3::RawUnsecured);
-}
-
 security::EncryptConfirm
-encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &target_certificate)
+encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &ea_certificate)
 {
     security::BackendOpenSsl backend;
 
@@ -162,21 +138,28 @@ encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::Certific
     packet.layer(OsiLayer::Application) = std::move(ec_request);
 
     security::EncryptService encrypt_service = security::straight_encrypt_serviceV3(backend);
-    security::EncryptRequest encrypt_request { std::move(packet), target_certificate };
+    security::EncryptRequest encrypt_request { std::move(packet), ea_certificate };
 
     security::EncryptConfirm encrypt_confirm = encrypt_service(encrypt_request);
     return encrypt_confirm;
 }
 
 asn1::EtsiTs103097Certificate
-decode_ec_response(const security::SecuredMessageV3 &ec_response, const std::array<uint8_t, 16> &session_key)
-{
+decode_ec_response(const security::SecuredMessageV3 &ec_response,
+                   const std::array<uint8_t, 16> &session_key,
+                   security::SecurityEntity &security_entity) {
     // Decrypt the response
     assert(ec_response.is_encrypted_message());
     security::BackendOpenSsl backend;
     security::DecryptService decrypt_service = security::straight_decrypt_serviceV3(backend);
     security::DecryptRequest decrypt_request { ec_response, session_key };
     security::DecryptConfirm decrypt_response = decrypt_service(decrypt_request);
+
+    vanetza::security::SecuredMessageVariant sec_packet = decrypt_response.decrypted_message;
+    vanetza::security::DecapRequest decap_request(sec_packet);
+
+    auto decap_res = security_entity.decapsulate_packet(std::move(decap_request));
+    assert(decap_res.report == vanetza::security::DecapReport::Success);
 
     // Decode the EtsiTs102941Data structure
     const vanetza::ByteBuffer etsi_ts_102_941_data_bb = decrypt_response.decrypted_message.get_payload();
