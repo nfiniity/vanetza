@@ -244,13 +244,13 @@ bool check_certificate_region_intern(const vanetza::security::GeographicRegion* 
 bool check_certificate_region(const Certificate& certificate, const PositionFix& position)
 {
     auto region = certificate.get_restriction<ValidityRestrictionType::Region>();
-    check_certificate_region_intern(region, position);
+    return check_certificate_region_intern(region, position);
 }
 
 bool check_certificate_region(const CertificateV3& certificate, const PositionFix& position)
 {
     auto region = certificate.get_geographic_region();
-    check_certificate_region_intern(region.get(), position);
+    return check_certificate_region_intern(region.get(), position);
 } // Test to be written
 
 bool check_certificate_region(CertificateVariant& certificate, const PositionFix& position)
@@ -346,7 +346,7 @@ bool assign_permissions(const vanetza::security::CertificateVariant& certificate
 
 VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificateProvider& cert_provider, CertificateValidator& certs, Backend& backend, CertificateCache& cert_cache, SignHeaderPolicy& sign_policy, PositionProvider& positioning){
     VerifyConfirm confirm;
-    const SecuredMessageV3 secured_message = boost::get<SecuredMessageV3>(request.secured_message);
+    const SecuredMessageV3 &secured_message = boost::get<SecuredMessageV3>(request.secured_message);
 
     if (cert_provider.version() != 3){
         confirm.report = VerificationReport::Incompatible_Protocol;
@@ -483,7 +483,7 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     // TODO check Duplicate_Message, Invalid_Mobility_Data, Unencrypted_Message, Decryption_Error
 
     // check signature
-    std::unique_ptr<Signature> signature = std::unique_ptr<Signature>(new Signature(secured_message.get_signature()));
+    auto signature = std::make_unique<Signature>(secured_message.get_signature());
     if (!signature) {
         confirm.report = VerificationReport::Unsigned_Message;
         return confirm;
@@ -539,7 +539,8 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     }
 
     // we can only check the generation location after we have identified the correct certificate
-    if (!check_generation_location(secured_message, *signer)) {
+    // ignore for certificate responses
+    if (its_aid != aid::SCR && !check_generation_location(secured_message, *signer)) {
         confirm.report = VerificationReport::Invalid_Certificate;
         confirm.certificate_validity = CertificateInvalidReason::Off_Region;
         return confirm;
