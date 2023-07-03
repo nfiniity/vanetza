@@ -65,7 +65,7 @@ find_package(Cohda MODULE QUIET)
 
 option(VANETZA_WITH_OPENSSL "Enable OpenSSL extensions" OFF)
 if (VANETZA_WITH_OPENSSL)
-  find_package(OpenSSL 1.0.1 REQUIRED)
+  find_package(OpenSSL 3.0 REQUIRED)
   include(CompatOpenSSLTargets)
 endif()
 
