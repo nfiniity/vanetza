@@ -30,7 +30,28 @@ Sha256Digest calculate_sha256_digest(const uint8_t* data, std::size_t len)
     return digest;
 }
 
-ByteBuffer calculate_sha256_signature_inputV3(const ByteBuffer& tbs_data, const CertificateV3& certificate)
+Sha384Digest calculate_sha384_digest(const uint8_t* data, std::size_t len)
+{
+    Sha384Digest digest;
+#if defined VANETZA_WITH_OPENSSL
+    static_assert(SHA384_DIGEST_LENGTH == digest.size(), "size of OpenSSL SHA384_DIGEST_LENGTH does not match");
+    SHA512_CTX ctx;
+    SHA384_Init(&ctx);
+    SHA384_Update(&ctx, data, len);
+    SHA384_Final(digest.data(), &ctx);
+#elif defined VANETZA_WITH_CRYPTOPP
+    static_assert(CryptoPP::SHA384::DIGESTSIZE == digest.size(), "size of CryptoPP::SHA384 diges does not match");
+    CryptoPP::SHA384 hash;
+    hash.CalculateDigest(digest.data(), data, len);
+#else
+#   error "no SHA384 implementation available"
+#endif
+    return digest;
+}
+
+
+// Adjust all references to this
+ByteBuffer calculate_sha_signature_inputV3(const ByteBuffer& tbs_data, const CertificateV3& certificate)
 {
     // Calculate tbs_data digest
     Sha256Digest tbs_data_digest = calculate_sha256_digest(tbs_data.data(), tbs_data.size());
@@ -39,14 +60,11 @@ ByteBuffer calculate_sha256_signature_inputV3(const ByteBuffer& tbs_data, const 
     bool self_signed = certificate.get_issuer_identifier() == HashedId8{{0, 0, 0, 0, 0, 0, 0, 0}};
 
     // Calculate the digest of the signer
-    Sha256Digest signer_digest;
-    if (self_signed) {
-        ByteBuffer empty_buffer{};
-        signer_digest = calculate_sha256_digest(empty_buffer.data(), empty_buffer.size());
-    } else {
-        signer_digest = calculate_sha256_digest(certificate.get_issuer_identifier().data(),
-                                                certificate.get_issuer_identifier().size());
+    ByteBuffer signer_buffer {};
+    if (!self_signed) {
+        signer_buffer = certificate.serialize();
     }
+    Sha256Digest signer_digest = calculate_sha256_digest(signer_buffer.data(), signer_buffer.size());
 
     // Concatenate the two digests
     ByteBuffer result(tbs_data_digest.size() + signer_digest.size());

@@ -506,17 +506,18 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
 
     for (const auto& cert : possible_certificates) {
         // The Subject type disappears on the V1.3.1
-        boost::optional<ecdsa256::PublicKey> public_key = get_public_key(cert, backend);
+        const CertificateV3& certificateV3 = boost::get<CertificateV3>(cert);
+        boost::optional<ecdsa256::PublicKey> public_key = certificateV3.get_public_key(backend);
+        boost::optional<std::string> curve_name = certificateV3.get_encryption_public_key_curve_name();
 
-        if (!public_key) {
+        if (!public_key || !curve_name) {
             confirm.report = VerificationReport::Invalid_Certificate;
             confirm.certificate_validity = CertificateInvalidReason::Missing_Public_Key;
             return confirm;
         }
 
-        const CertificateV3& certificateV3 = boost::get<CertificateV3>(cert);
-        ByteBuffer signature_input = calculate_sha256_signature_inputV3(payload, certificateV3);
-        if (backend.verify_data(public_key.get(), signature_input, *ecdsa)) {
+        ByteBuffer signature_input = calculate_sha_signature_inputV3(payload, certificateV3);
+        if (backend.verify_data(public_key.get(), signature_input, *ecdsa, *curve_name)) {
             signer = cert;
             break;
         }

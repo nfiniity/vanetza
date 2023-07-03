@@ -113,10 +113,11 @@ SignService straight_sign_serviceV3(CertificateProvider& certificate_provider, B
 
         ByteBuffer data_buffer = secured_message.convert_for_signing();
         const CertificateV3& certificate = boost::get<CertificateV3>(certificate_provider.own_certificate());
-        ByteBuffer signature_input = calculate_sha256_signature_inputV3(data_buffer, certificate);
-        Signature signature = backend.sign_data(private_key, signature_input);
+        const std::string& curve_name = *certificate.get_public_key_curve_name();
+        ByteBuffer signature_input = calculate_sha_signature_inputV3(data_buffer, certificate);
+        Signature signature = backend.sign_data(private_key, signature_input, curve_name);
 
-        secured_message.set_signature(signature);
+        secured_message.set_signature(signature, curve_name);
 
         return confirm;
     };
@@ -138,19 +139,26 @@ SignService deferred_sign_serviceV3(CertificateProvider& certificate_provider, B
             secured_message.set_payload(payload, request.message_type);
         }
 
+        const CertificateV3& certificate = boost::get<CertificateV3>(certificate_provider.own_certificate());
+        const std::string& curve_name = *certificate.get_public_key_curve_name();
+
         static const Signature placeholder = signature_placeholder();
         static const size_t signature_size = get_size(placeholder);
 
-        auto future = std::async(std::launch::deferred, [&backend, secured_message, &certificate_provider]() {
-            const auto& private_key = certificate_provider.own_private_key();
-            ByteBuffer data = secured_message.convert_for_signing();
-            const CertificateV3& certificate = boost::get<CertificateV3>(certificate_provider.own_certificate());
-            ByteBuffer signature_input = calculate_sha256_signature_inputV3(data, certificate);
-            return backend.sign_data(private_key, signature_input);
-        });
+        auto future =
+            std::async(std::launch::deferred, [&backend, secured_message,
+                                               &certificate_provider,
+                                               &certificate, &curve_name]() {
+                const auto &private_key =
+                    certificate_provider.own_private_key();
+                ByteBuffer data = secured_message.convert_for_signing();
+                ByteBuffer signature_input =
+                    calculate_sha_signature_inputV3(data, certificate);
+                return backend.sign_data(private_key, signature_input, curve_name);
+            });
 
         EcdsaSignatureFuture signature(future.share(), signature_size);
-        secured_message.set_signature(signature);
+        secured_message.set_signature(signature, curve_name);
         return confirm;
     };
 }
