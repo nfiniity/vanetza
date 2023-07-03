@@ -233,7 +233,12 @@ class CertificateV3{
          * \brief Constructor for the V1.3.1 Certificate.
          * \param coer_certificate ByteBuffer with a COER encoded certificate
          */
-        CertificateV3(vanetza::ByteBuffer coer_certificate);
+        CertificateV3(const vanetza::ByteBuffer &coer_certificate);
+        /**
+         * \brief Constructor for the V1.3.1 Certificate (used as a dummy for self-signed to save the curve name)
+         * \param curve_name Curve name
+         */
+        explicit CertificateV3(const std::string& curve_name);
         /**
          * \brief Constructor for the V1.3.1 Certificate.
          * \param certificate Asn1c V1.3.1 certificate object

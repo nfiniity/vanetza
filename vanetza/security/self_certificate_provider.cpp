@@ -5,10 +5,9 @@ namespace vanetza
 namespace security
 {
 
-SelfCertificateProvider::SelfCertificateProvider(const ecdsa256::PrivateKey& canonical_key) :
-    canonical_key(canonical_key)
-{
-}
+SelfCertificateProvider::SelfCertificateProvider(
+    const ecdsa256::PrivateKey &canonical_key, const std::string &curve_name)
+    : canonical_key(canonical_key), cert(CertificateV3(curve_name)) {}
 
 int SelfCertificateProvider::version()
 {

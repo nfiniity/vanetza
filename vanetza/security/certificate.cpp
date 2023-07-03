@@ -279,13 +279,27 @@ CertificateV3::CertificateV3(){
 CertificateV3::~CertificateV3(){
 }
 
-CertificateV3::CertificateV3(vanetza::ByteBuffer certificate){
+CertificateV3::CertificateV3(const vanetza::ByteBuffer &certificate){
     this->certificate.decode(certificate);
 }
 
 CertificateV3::CertificateV3(const CertificateV3& certificate){
     vanetza::ByteBuffer buffer = certificate.serialize();
     this->certificate.decode(buffer);
+}
+
+CertificateV3::CertificateV3(const std::string& curve_name): CertificateV3() {
+    PublicVerificationKey_PR key_type;
+    if (curve_name == "prime256v1") {
+        key_type = PublicVerificationKey_PR_ecdsaNistP256;
+    } else if (curve_name == "brainpoolP256r1") {
+        key_type = PublicVerificationKey_PR_ecdsaBrainpoolP256r1;
+    } else if (curve_name == "brainpoolP384r1") {
+        key_type = PublicVerificationKey_PR_ecdsaBrainpoolP384r1;
+    } else {
+        throw std::invalid_argument("Unknown curve name");
+    }
+    CHOICE_variant_set_presence(&asn_DEF_PublicVerificationKey, &this->certificate->toBeSigned.verifyKeyIndicator.choice.verificationKey, key_type);
 }
 
 CertificateV3::CertificateV3(const Certificate_t& certificate){
