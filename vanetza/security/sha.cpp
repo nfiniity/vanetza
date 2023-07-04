@@ -53,10 +53,14 @@ ByteBuffer calculate_sha_signature_inputV3(const ByteBuffer &tbs_data,
                                            const CertificateV3 &certificate,
                                            const std::string &curve_name)
 {
-    // Check is the certificate is self-signed
-    bool self_signed = certificate.get_issuer_identifier() == HashedId8{{0, 0, 0, 0, 0, 0, 0, 0}};
+    // Check if we have a dummy certificate
+    HashedId8 cert_issuer = certificate.get_issuer_identifier();
+    bool verification_type_certificate = cert_issuer != HashedId8{{0, 0, 0, 0, 0, 0, 0, 0}};
+
+    // Serialize certificate for signer data
+    // or use empty buffer if verification type is self
     ByteBuffer signer_data {};
-    if (!self_signed) {
+    if (verification_type_certificate) {
         signer_data = certificate.serialize();
     }
 
