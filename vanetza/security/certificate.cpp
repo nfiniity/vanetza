@@ -280,18 +280,13 @@ CertificateV3::CertificateV3() {
     this->certificate.decode(white_cert_buffer);
 }
 
-CertificateV3::~CertificateV3() = default;
-
-CertificateV3::CertificateV3(const vanetza::ByteBuffer &certificate){
+CertificateV3::CertificateV3(const vanetza::ByteBuffer &certificate) {
     this->certificate.decode(certificate);
 }
 
-CertificateV3::CertificateV3(const CertificateV3& certificate){
-    vanetza::ByteBuffer buffer = certificate.serialize();
-    this->certificate.decode(buffer);
-}
+CertificateV3::CertificateV3(const std::string& curve_name): is_dummy_certificate(true) {
+    this->certificate.decode(white_cert_buffer);
 
-CertificateV3::CertificateV3(const std::string& curve_name): CertificateV3() {
     PublicVerificationKey_PR key_type;
     if (curve_name == "prime256v1") {
         key_type = PublicVerificationKey_PR_ecdsaNistP256;
@@ -303,11 +298,9 @@ CertificateV3::CertificateV3(const std::string& curve_name): CertificateV3() {
         throw std::invalid_argument("Unknown curve name");
     }
     CHOICE_variant_set_presence(&asn_DEF_PublicVerificationKey, &this->certificate->toBeSigned.verifyKeyIndicator.choice.verificationKey, key_type);
-
-    this->is_dummy_certificate = true;
 }
 
-CertificateV3::CertificateV3(const Certificate_t& certificate){
+CertificateV3::CertificateV3(const Certificate_t& certificate) {
     if(certificate.type == CertificateType_explicit){
         vanetza::asn1::Ieee1609Dot2Certificate temp;
         *temp = certificate;

@@ -223,7 +223,7 @@ class CertificateV3{
          * \brief Constructor for the V1.3.1 Certificate. By default constructs the certificate with all values set to 0.
          */
         CertificateV3();
-        ~CertificateV3();
+        ~CertificateV3() = default;
         /**
          * \brief Constructor for the V1.3.1 Certificate.
          * \param certificate EtsiTs103097Certificate wrapper
@@ -248,7 +248,24 @@ class CertificateV3{
          * \brief Copy constructor for V1.3.1 Certificate
          * \param certificate Own object
          */
-        CertificateV3(const CertificateV3& certificate);
+        CertificateV3(const CertificateV3& certificate) = default;
+        /**
+         * \brief Move constructor for V1.3.1 Certificate
+         * \param certificate Own object
+         */
+        CertificateV3(CertificateV3&& certificate) = default;
+        /**
+         * \brief Copy assignment operator for V1.3.1 Certificate
+         * \param certificate Own object
+         * \return Reference to own object
+         */
+        CertificateV3& operator=(const CertificateV3& certificate) = default;
+        /**
+         * \brief Move assignment operator for V1.3.1 Certificate
+         * \param certificate Own object
+         * \return Reference to own object
+         */
+        CertificateV3& operator=(CertificateV3&& certificate) = default;
         /**
          * \brief Serialize the v1.3.1 Certificate as specified in the standard
          * \return ByteBuffer with Certificate encoded in COER
@@ -353,7 +370,7 @@ class CertificateV3{
 
         vanetza::asn1::EtsiTs103097Certificate certificate;
         bool is_dummy_certificate = false;
-
+//
 };
 
 void serialize(OutputArchive& ar, const CertificateV3& certificate);
