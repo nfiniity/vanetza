@@ -66,6 +66,13 @@ bool check_generation_time(const SecuredMessageV3& message, Clock::time_point no
         const Psid_t psid = message.get_psid();
         if (aid::CA == psid) {
             generation_time_past = generation_time_past_ca;
+        } else if (aid::CTL == psid) {
+            // CTLs can be valid for about 4 months
+            generation_time_past = hours(3000);
+        } else if (aid::CRL == psid) {
+            // This is not specified, so we assume this is equal
+            // to the maximum validity of a CA certificate (5 years)
+            generation_time_past = hours(43800);
         }
 
         if (*generation_time > convert_time64(now + generation_time_future)) {
