@@ -167,8 +167,7 @@ void DefaultSignHeaderPolicy::prepare_headers(const SignRequest& request, Certif
         HashedId8 issuer_identifier = cert.get_issuer_identifier();
 
         SignerInfo signer_info = std::nullptr_t();
-        // Empty HashedId8 means that the certificate is self-signed
-        // or no certificate is available as is the case for initial enrolment
+        // Empty HashedId8 means that we have a dummy certificate for initial enrolment
         if (issuer_identifier != HashedId8 {{0, 0, 0, 0, 0, 0, 0, 0}}) {
             signer_info = cert.calculate_hash();
         }

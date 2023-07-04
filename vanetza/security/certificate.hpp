@@ -295,6 +295,11 @@ class CertificateV3{
          */
         HashedId8 get_issuer_identifier() const;
         /**
+         * \brief Check if the certificate is self-signed
+         * \return True if the certificate is self-signed
+         */
+        bool is_self_signed() const;
+        /**
          * \brief Returns the signature of the Certificate
          * \return Signature object
          */
@@ -347,6 +352,7 @@ class CertificateV3{
         void EccP256CurvePoint_to_x_only(EccP256CurvePoint_t& curve_point) const; //Needed to calculate hash
 
         vanetza::asn1::EtsiTs103097Certificate certificate;
+        bool is_dummy_certificate = false;
 
 };
 

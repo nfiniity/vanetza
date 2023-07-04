@@ -483,6 +483,11 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
 
     HashedId8 signer_hash = certificate.get_issuer_identifier();
 
+    if (certificate.is_self_signed()) {
+        bool is_trusted = !m_trust_store.lookup(signer_hash).empty();
+        return is_trusted ? CertificateValidity::valid() : CertificateInvalidReason::Unknown_Signer;
+    }
+
     if (signer_hash == HashedId8{{0,0,0,0,0,0,0,0}}) {
         return CertificateInvalidReason::Invalid_Signer;
     }
