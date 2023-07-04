@@ -417,14 +417,6 @@ boost::optional<ecdsa256::PublicKey> get_public_key(const CertificateVariant& ce
  */
 HashedId8 calculate_hash(const CertificateVariant&);
 
-/**
- * Convert Uncompressed to PublicKey
- * \param unc Uncompressed
- * \return PublicKey
- */
-ecdsa256::PublicKey public_key_from_uncompressed(const Uncompressed &unc);
-
-
 } // namespace security
 } // namespace vanetza
 

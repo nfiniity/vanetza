@@ -127,10 +127,9 @@ boost::optional<ecdsa256::PublicKey> get_public_key(const Certificate& cert, Bac
     auto unc = get_uncompressed_public_key(cert, backend);
     boost::optional<ecdsa256::PublicKey> result;
     ecdsa256::PublicKey pub;
-    if (unc && unc->x.size() == pub.x.size() && unc->y.size() == pub.y.size()) {
-        std::copy_n(unc->x.begin(), pub.x.size(), pub.x.data());
-        std::copy_n(unc->y.begin(), pub.y.size(), pub.y.data());
-        result = std::move(pub);
+    if (unc) {
+        pub.x = unc->x;
+        pub.y = unc->y;
     }
     return result;
 }
@@ -530,7 +529,7 @@ boost::optional<ecdsa256::PublicKey>  CertificateV3::get_public_key(Backend& bac
 {
     auto unc = this->get_uncompressed_public_key(backend);
     if (unc) {
-        return public_key_from_uncompressed(*unc);
+        return ecdsa256::create_public_key(*unc);
     } else {
         return boost::none;
     }
@@ -581,7 +580,7 @@ boost::optional<ecdsa256::PublicKey> CertificateV3::get_encryption_public_key(Ba
 {
     auto unc = this->get_encryption_uncompressed_public_key(backend);
     if (unc) {
-        return public_key_from_uncompressed(*unc);
+        return ecdsa256::create_public_key(*unc);
     } else {
         return boost::none;
     }
@@ -712,18 +711,6 @@ HashedId8 calculate_hash(const CertificateVariant& cert){
             }
         };
     return boost::apply_visitor(canonical_visitor(), cert);
-}
-
-ecdsa256::PublicKey public_key_from_uncompressed(const Uncompressed &unc)
-{
-    ecdsa256::PublicKey pub;
-    if (unc.x.size() != pub.x.size() || unc.y.size() != pub.y.size()) {
-        throw std::invalid_argument("Invalid uncompressed public key");
-    }
-
-    std::copy_n(unc.x.begin(), pub.x.size(), pub.x.data());
-    std::copy_n(unc.y.begin(), pub.y.size(), pub.y.data());
-    return pub;
 }
 
 } // ns security

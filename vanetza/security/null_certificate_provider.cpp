@@ -54,7 +54,7 @@ std::list<CertificateVariant> NullCertificateProvider::own_chain()
 
 const ecdsa256::PrivateKey& NullCertificateProvider::own_private_key()
 {
-    static const ecdsa256::PrivateKey null_key {};
+    static const ecdsa256::PrivateKey null_key { ByteBuffer(32) };
     return null_key;
 }
 

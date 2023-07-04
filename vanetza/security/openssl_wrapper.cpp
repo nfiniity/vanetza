@@ -186,12 +186,13 @@ EvpKey::EvpKey(const std::string &curve_name,
         check(1 == OSSL_PARAM_BLD_push_BN(param_bld, "priv", *bn_priv_key));
     }
 
-    std::array<uint8_t, 65> key_bytes;
+    size_t num_bytes = priv_key ? priv_key->key.size() : pub_key->x.size();
+    ByteBuffer key_bytes(1 + 2 * num_bytes);
     if (pub_key) {
         // Convert PublicKey to OpenSSL import format
         key_bytes[0] = POINT_CONVERSION_UNCOMPRESSED;
         std::copy(pub_key->x.begin(), pub_key->x.end(), key_bytes.begin() + 1);
-        std::copy(pub_key->y.begin(), pub_key->y.end(), key_bytes.begin() + 33);
+        std::copy(pub_key->y.begin(), pub_key->y.end(), key_bytes.begin() + 1 + num_bytes);
     } else {
         // Compute public key from private key
         int group_nid = OBJ_sn2nid(curve_name.data());
@@ -260,16 +261,24 @@ std::string EvpKey::group_name() const
 ecdsa256::PublicKey EvpKey::public_key() const
 {
     ecdsa256::PublicKey key;
-    std::array<uint8_t, 65> out_buf;
+    std::array<uint8_t, 97> out_buf;
     size_t out_len;
 
     check(1 == EVP_PKEY_set_utf8_string_param(evpKey, "point-format", "uncompressed") &&
           1 == EVP_PKEY_get_octet_string_param(evpKey, "pub", out_buf.data(), out_buf.size(), &out_len));
-    assert(out_len == out_buf.size());
     assert(out_buf[0] == POINT_CONVERSION_UNCOMPRESSED);
 
-    std::copy(out_buf.begin() + 1, out_buf.begin() + 33, key.x.begin());
-    std::copy(out_buf.begin() + 33, out_buf.begin() + 65, key.y.begin());
+    if (out_len == 65) {
+        // 256-bit curve
+        key.x.assign(out_buf.begin() + 1, out_buf.begin() + 33);
+        key.y.assign(out_buf.begin() + 33, out_buf.begin() + 65);
+    } else if (out_len == 97) {
+        // 384-bit curve
+        key.x.assign(out_buf.begin() + 1, out_buf.begin() + 49);
+        key.y.assign(out_buf.begin() + 49, out_buf.begin() + 97);
+    } else {
+        throw std::runtime_error("Unexpected public key length");
+    }
 
     return key;
 }
@@ -279,9 +288,11 @@ ecdsa256::PrivateKey EvpKey::private_key() const
     ecdsa256::PrivateKey key;
     BIGNUM *private_number = nullptr;
 
-    check(1 == EVP_PKEY_get_bn_param(evpKey, "priv", &private_number) &&
-          BN_num_bytes(private_number) == key.key.size() &&
-          BN_bn2bin(private_number, key.key.data()));
+    check(1 == EVP_PKEY_get_bn_param(evpKey, "priv", &private_number));
+    int key_size = BN_num_bytes(private_number);
+    assert(key_size == 32 || key_size == 48);
+    key.key.resize(key_size);
+    openssl::check(key_size == BN_bn2bin(private_number, key.key.data()));
 
     BN_clear_free(private_number);
     return key;

@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <utility>
+#include <vanetza/common/byte_buffer.hpp>
 
 namespace vanetza
 {
@@ -16,12 +17,10 @@ struct Uncompressed;
 namespace ecdsa256
 {
 
-constexpr unsigned digest_octets = 32;
-
 struct PublicKey
 {
-    std::array<uint8_t, digest_octets> x;
-    std::array<uint8_t, digest_octets> y;
+    ByteBuffer x;
+    ByteBuffer y;
 };
 
 bool operator==(const PublicKey& lhs, const PublicKey& rhs);
@@ -30,7 +29,7 @@ bool operator!=(const PublicKey& lhs, const PublicKey& rhs);
 
 struct PrivateKey
 {
-    std::array<uint8_t, digest_octets> key;
+    ByteBuffer key;
 };
 
 bool operator==(const PrivateKey& lhs, const PrivateKey& rhs);

@@ -13,12 +13,7 @@ namespace ecdsa256
 
 PublicKey create_public_key(const Uncompressed& unc)
 {
-    PublicKey pb;
-    assert(unc.x.size() == pb.x.size());
-    assert(unc.y.size() == pb.y.size());
-    std::copy_n(unc.x.begin(), pb.x.size(), pb.x.begin());
-    std::copy_n(unc.y.begin(), pb.y.size(), pb.y.begin());
-    return pb;
+    return ecdsa256::PublicKey { unc.x, unc.y };
 }
 
 bool operator==(const PublicKey& lhs, const PublicKey& rhs)
