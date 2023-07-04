@@ -405,11 +405,24 @@ ByteBuffer CertificateV3::convert_for_signing() const {
 }
 
 HashedId8 CertificateV3::calculate_hash() const {
-    vanetza::ByteBuffer bytes = this->convert_for_signing();
+    // IEEE 1609.2-2022, section 5.3.9.2
+    vanetza::ByteBuffer cert_bb = this->convert_for_signing();
+    std::string curve_name = this->get_public_key_curve_name().get();
+    ByteBuffer cert_digest;
+
+    if (curve_name == "prime256v1" || curve_name == "brainpoolP256r1") {
+        auto cert_digest_array = calculate_sha256_digest(cert_bb.data(), cert_bb.size());
+        cert_digest = ByteBuffer(cert_digest_array.begin(), cert_digest_array.end());
+    } else if (curve_name == "brainpoolP384r1") {
+        auto signer_digest_array = calculate_sha384_digest(cert_bb.data(), cert_bb.size());
+        cert_digest = ByteBuffer(signer_digest_array.begin(), signer_digest_array.end());
+    } else {
+        throw std::runtime_error("Unsupported curve name");
+    }
+
     HashedId8 id;
-    Sha256Digest digest = calculate_sha256_digest(bytes.data(), bytes.size());
-    assert(digest.size() >= id.size());
-    std::copy(digest.end() - id.size(), digest.end(), id.begin());
+    assert(cert_digest.size() >= id.size());
+    std::copy(cert_digest.end() - id.size(), cert_digest.end(), id.begin());
     return id;
 }
 

@@ -159,7 +159,7 @@ std::list<ItsAid> extract_application_identifiers(const CertificateV3& certifica
             case ServiceSpecificPermissions_PR_opaque:
                 // TODO
                 break;
-            
+
             case ServiceSpecificPermissions_PR_bitmapSsp:
                 //TODO
                 break;
@@ -239,7 +239,7 @@ bool check_subject_assurance_consistency(const Certificate& certificate, const C
     auto certificate_assurance = certificate.get_attribute<SubjectAttributeType::Assurance_Level>();
     auto signer_assurance = signer.get_attribute<SubjectAttributeType::Assurance_Level>();
     return check_subject_assurance_consistency_intern(certificate_assurance, signer_assurance);
-    
+
 }
 
 bool check_subject_assurance_consistency(const CertificateV3& certificate, const CertificateV3& signer)
@@ -285,7 +285,7 @@ bool check_region_consistency(const Certificate& certificate, const Certificate&
     auto certificate_region = certificate.get_restriction<ValidityRestrictionType::Region>();
     auto signer_region = signer.get_restriction<ValidityRestrictionType::Region>();
     return check_region_consistency_intern(certificate_region, signer_region);
-    
+
 }
 
 bool check_region_consistency(const CertificateV3& certificate, const CertificateV3& signer)
@@ -496,14 +496,16 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
     ByteBuffer binary_cert = certificate.convert_for_signing();
 
     // authorization tickets may only be signed by authorization authorities
-    
+
     for (auto& possible_signer : m_cert_cache.lookup(signer_hash)) {
-        auto verification_key = get_public_key(possible_signer, m_crypto_backend);
-        if (!verification_key) {
+        CertificateV3 signer_cert = boost::get<CertificateV3>(possible_signer);
+        auto verification_key = signer_cert.get_public_key(m_crypto_backend);
+        auto curve_name = signer_cert.get_public_key_curve_name();
+        if (!verification_key || !curve_name) {
             continue;
         }
 
-        if (m_crypto_backend.verify_data(verification_key.get(), binary_cert, sig.get())) {
+        if (m_crypto_backend.verify_data(verification_key.get(), binary_cert, sig.get(), curve_name.get())) {
             if (!check_consistency(certificate, possible_signer)) {
                 return CertificateInvalidReason::Inconsistent_With_Signer;
             }
@@ -515,12 +517,14 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
     // authorization authorities may only be signed by root CAs
     // Note: There's no clear specification about this, but there's a test for it in 5.2.7.12.4 of TS 103 096-2 V1.3.1
     for (auto& possible_signer : m_trust_store.lookup(signer_hash)) {
-        auto verification_key = get_public_key(possible_signer, m_crypto_backend);
-        if (!verification_key) {
+        CertificateV3 signer_cert = boost::get<CertificateV3>(possible_signer);
+        auto verification_key = signer_cert.get_public_key(m_crypto_backend);
+        auto curve_name = signer_cert.get_public_key_curve_name();
+        if (!verification_key || !curve_name) {
             continue;
         }
 
-        if (m_crypto_backend.verify_data(verification_key.get(), binary_cert, sig.get())) {
+        if (m_crypto_backend.verify_data(verification_key.get(), binary_cert, sig.get(), curve_name.get())) {
             if (!check_consistency(certificate, possible_signer)) {
                 return CertificateInvalidReason::Inconsistent_With_Signer;
             }

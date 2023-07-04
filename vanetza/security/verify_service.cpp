@@ -508,7 +508,7 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         // The Subject type disappears on the V1.3.1
         const CertificateV3& certificateV3 = boost::get<CertificateV3>(cert);
         boost::optional<ecdsa256::PublicKey> public_key = certificateV3.get_public_key(backend);
-        boost::optional<std::string> curve_name = certificateV3.get_encryption_public_key_curve_name();
+        boost::optional<std::string> curve_name = certificateV3.get_public_key_curve_name();
 
         if (!public_key || !curve_name) {
             confirm.report = VerificationReport::Invalid_Certificate;

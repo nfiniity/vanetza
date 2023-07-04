@@ -49,8 +49,6 @@ Sha384Digest calculate_sha384_digest(const uint8_t* data, std::size_t len)
     return digest;
 }
 
-
-// Adjust all references to this
 ByteBuffer calculate_sha_signature_inputV3(const ByteBuffer &tbs_data,
                                            const CertificateV3 &certificate,
                                            const std::string &curve_name)
