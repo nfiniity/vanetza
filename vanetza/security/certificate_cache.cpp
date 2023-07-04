@@ -62,11 +62,15 @@ void CertificateCache::insert_v3(const CertificateV3& certificate)
     // TODO: implement equality comparison for Certificate
     // Do we need this, or is it enough to check the hash?
     if (certs.size()) {
-        const auto binary_insert = certificate.convert_for_signing();
+        const auto binary_insert = certificate.calculate_hash();
         for (auto& cert : certs) {
-            const auto binary_found = convert_for_signing(cert);
-            if (binary_insert == binary_found) {
-                return;
+            try {
+                const auto binary_found = boost::get<CertificateV3>(cert).calculate_hash();
+                if (binary_insert == binary_found) {
+                    return;
+                }
+            } catch (boost::bad_get&) {
+                continue;
             }
         }
     }

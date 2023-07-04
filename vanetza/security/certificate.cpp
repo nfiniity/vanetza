@@ -406,12 +406,12 @@ void CertificateV3::EccP256CurvePoint_to_x_only(EccP256CurvePoint_t& curve_point
 }
 
 ByteBuffer CertificateV3::convert_for_signing() const {
-    return this->serialize();
+    return vanetza::asn1::encode_oer(asn_DEF_ToBeSignedCertificate, &this->certificate->toBeSigned);
 }
 
 HashedId8 CertificateV3::calculate_hash() const {
     // IEEE 1609.2-2022, section 5.3.9.2
-    vanetza::ByteBuffer cert_bb = this->convert_for_signing();
+    vanetza::ByteBuffer cert_bb = this->serialize();
     std::string curve_name = this->get_public_key_curve_name().get();
     ByteBuffer cert_digest;
 
