@@ -9,6 +9,7 @@
 #include <vanetza/security/signature.hpp>
 #include <vanetza/security/trust_store.hpp>
 #include <vanetza/security/certificate.hpp>
+#include <vanetza/security/sha.hpp>
 #include <algorithm>
 #include <chrono>
 
@@ -505,7 +506,8 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
             continue;
         }
 
-        if (m_crypto_backend.verify_data(verification_key.get(), binary_cert, sig.get(), curve_name.get())) {
+        ByteBuffer signature_input = calculate_sha_signature_inputV3(binary_cert, signer_cert, *curve_name);
+        if (m_crypto_backend.verify_data(verification_key.get(), signature_input, sig.get(), curve_name.get())) {
             if (!check_consistency(certificate, possible_signer)) {
                 return CertificateInvalidReason::Inconsistent_With_Signer;
             }
@@ -524,7 +526,8 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
             continue;
         }
 
-        if (m_crypto_backend.verify_data(verification_key.get(), binary_cert, sig.get(), curve_name.get())) {
+        ByteBuffer signature_input = calculate_sha_signature_inputV3(binary_cert, signer_cert, *curve_name);
+        if (m_crypto_backend.verify_data(verification_key.get(), signature_input, sig.get(), curve_name.get())) {
             if (!check_consistency(certificate, possible_signer)) {
                 return CertificateInvalidReason::Inconsistent_With_Signer;
             }
