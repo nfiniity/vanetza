@@ -238,34 +238,6 @@ std::array<uint8_t, 32> BackendOpenSsl::calculate_digest(const ByteBuffer& data)
     return digest;
 }
 
-openssl::Key BackendOpenSsl::internal_private_key(const ecdsa256::PrivateKey& generic) const
-{
-    openssl::Key key(NID_X9_62_prime256v1);
-    openssl::BigNumber prv(generic.key);
-    EC_KEY_set_private_key(key, prv);
-
-    // OpenSSL requires public key, so we recreate it from private key
-    openssl::BigNumberContext ctx;
-    const EC_GROUP* group = EC_KEY_get0_group(key);
-    openssl::Point pub(group);
-    openssl::check(EC_POINT_mul(group, pub, prv, nullptr, nullptr, ctx));
-    EC_KEY_set_public_key(key, pub);
-
-    openssl::check(EC_KEY_check_key(key));
-    return key;
-}
-
-openssl::Key BackendOpenSsl::internal_public_key(const ecdsa256::PublicKey& generic) const
-{
-    openssl::Key key(NID_X9_62_prime256v1);
-    openssl::BigNumber x(generic.x);
-    openssl::BigNumber y(generic.y);
-    EC_KEY_set_public_key_affine_coordinates(key, x, y);
-
-    openssl::check(EC_KEY_check_key(key));
-    return key;
-}
-
 int BackendOpenSsl::aes_ccm_encrypt(const ByteBuffer &plaintext, const std::array<uint8_t, 16> &key,
                                 const std::array<uint8_t, 12> &iv, ByteBuffer &ciphertext, std::array<uint8_t, 16> &tag) const
 {

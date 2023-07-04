@@ -98,12 +98,6 @@ private:
     /// Calculate SHA256 digest of data buffer
     std::array<uint8_t, 32> calculate_digest(const ByteBuffer& data) const;
 
-    /// Convert to internal format of private key
-    openssl::Key internal_private_key(const ecdsa256::PrivateKey&) const;
-
-    /// Convert to internal format of public key
-    openssl::Key internal_public_key(const ecdsa256::PublicKey&) const;
-
     // Derive encryption and signing keys for AES key encryption using ECIES
     EciesKeys get_ecies_keys(openssl::EvpKey &private_key, openssl::EvpKey &public_key, ByteBuffer shared_info) const;
 
