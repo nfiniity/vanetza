@@ -390,7 +390,7 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     const IntX its_aid = IntX(secured_message.get_psid());
     confirm.its_aid = its_aid.get();
 
-    const std::unique_ptr<SignerInfo> signer_info(new SignerInfo(secured_message.get_signer_info()));
+    const boost::optional<SignerInfo> signer_info = secured_message.get_signer_info();
     std::list<CertificateVariant> possible_certificates;
     bool possible_certificates_from_cache = false;
 
@@ -405,15 +405,15 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         switch (get_type(*signer_info)) {
             case SignerInfoType::Certificate:
                 possible_certificates.push_back(boost::get<CertificateVariant>(*signer_info));
-                signer_hash = calculate_hash((boost::get<CertificateVariant>(*signer_info)));
+                signer_hash = calculate_hash(boost::get<CertificateVariant>(*signer_info));
 
-                if (confirm.its_aid == aid::CA && cert_cache.lookup(signer_hash).size() == 0) {
+                if (confirm.its_aid == aid::CA && cert_cache.lookup(signer_hash).empty()) {
                     // Previously unknown certificate, send own certificate in next CAM
                     // See TS 103 097 v1.2.1, section 7.1, 1st bullet, 3rd dash
                     sign_policy.request_certificate();
                 }
-
                 break;
+
             case SignerInfoType::Certificate_Digest_With_SHA256:
                 signer_hash = boost::get<HashedId8>(*signer_info);
                 temp_variant_cache = cert_cache.lookup(signer_hash);
@@ -422,27 +422,25 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
                 }
                 possible_certificates_from_cache = true;
                 break;
+
             case SignerInfoType::Certificate_Chain:
                 chain = boost::get<std::list<CertificateVariant>>(*signer_info);
-                if (chain.size() == 1){
-                    possible_certificates.push_back(chain.front());
-                    signer_hash = calculate_hash(chain.front());
-
-                    if (confirm.its_aid == aid::CA && cert_cache.lookup(signer_hash).size() == 0) {
-                        // Previously unknown certificate, send own certificate in next CAM
-                        // See TS 103 097 v1.2.1, section 7.1, 1st bullet, 3rd dash
-                        sign_policy.request_certificate();
-                    }
-
-                } else if (chain.size() == 0) {
+                if (chain.empty()) {
                     confirm.report = VerificationReport::Signer_Certificate_Not_Found;
                     return confirm;
+
                 } else if (chain.size() > 3) {
                     // prevent DoS by sending very long chains, maximum length is three certificates, because:
                     // AT → AA → Root and no other signatures are allowed, sending the Root is optional
                     confirm.report = VerificationReport::Invalid_Certificate;
                     return confirm;
-                } else if (chain.size()>1){
+
+                } else if (chain.size() == 1 && confirm.its_aid == aid::CA && cert_cache.lookup(signer_hash).empty()) {
+                    // Previously unknown certificate, send own certificate in next CAM
+                    // See TS 103 097 v1.2.1, section 7.1, 1st bullet, 3rd dash
+                    sign_policy.request_certificate();
+
+                } else if (chain.size() > 1) {
                     // pre-check chain certificates, otherwise they're not available for the ticket check
                     // The second certificate will always have to be the AA
                     std::list<CertificateVariant>::iterator it = chain.begin();
@@ -471,10 +469,10 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
                 signer_hash =  calculate_hash(chain.front());
                 possible_certificates.push_back(chain.front());
                 break;
+
             default:
                 confirm.report = VerificationReport::Unsupported_Signer_Identifier_Type;
                 return confirm;
-                break;
         }
     }
     if (possible_certificates.size() == 0) {
@@ -490,20 +488,14 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     // TODO check Duplicate_Message, Invalid_Mobility_Data, Unencrypted_Message, Decryption_Error
 
     // check signature
-    auto signature = std::make_unique<Signature>(secured_message.get_signature());
-    if (!signature) {
+    const boost::optional<security::Signature> signature_variant = secured_message.get_signature();
+    if (!signature_variant) {
         confirm.report = VerificationReport::Unsigned_Message;
         return confirm;
     }
-    if (PublicKeyAlgorithm::ECDSA_NISTP256_With_SHA256 != get_type(*signature)) {
-        confirm.report = VerificationReport::False_Signature;
-        return confirm;
-    }
 
-    // check the size of signature.R and siganture.s
-    auto ecdsa = extract_ecdsa_signature(*signature);
-    const auto field_len = field_size(PublicKeyAlgorithm::ECDSA_NISTP256_With_SHA256);
-    if (!ecdsa || ecdsa->s.size() != field_len) {
+    const boost::optional<EcdsaSignature> signature = extract_ecdsa_signature(*signature_variant);
+    if (!signature) {
         confirm.report = VerificationReport::False_Signature;
         return confirm;
     }
@@ -524,7 +516,7 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         }
 
         ByteBuffer signature_input = calculate_sha_signature_inputV3(payload, certificateV3, *curve_name);
-        if (backend.verify_data(*public_key, signature_input, *ecdsa, *curve_name)) {
+        if (backend.verify_data(*public_key, signature_input, *signature, *curve_name)) {
             signer = cert;
             break;
         }
@@ -565,12 +557,9 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     if (!cert_validity) {
         confirm.report = VerificationReport::Invalid_Certificate;
 
-        if (cert_validity.reason() == CertificateInvalidReason::Unknown_Signer) {
-            if (secured_message.is_signer_digest()) {
-                auto signer_hash = boost::get<HashedId8>(secured_message.get_signer_info());
+        if (cert_validity.reason() == CertificateInvalidReason::Unknown_Signer && secured_message.is_signer_digest()) {
                 confirm.certificate_id = signer_hash;
                 sign_policy.request_unrecognized_certificate(signer_hash);
-            }
         }
 
         return confirm;

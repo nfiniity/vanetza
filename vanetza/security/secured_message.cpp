@@ -314,30 +314,38 @@ bool SecuredMessageV3::is_encrypted_message() const {
     return this->message->content->present == Ieee1609Dot2Content_PR_encryptedData;
 }
 
-SignerInfo SecuredMessageV3::get_signer_info() const{
-    SignerInfo to_return = std::nullptr_t();
-    if (this->is_signed_message()){
-        switch (this->message->content->choice.signedData->signer.present)
-        {
+boost::optional<SignerInfo> SecuredMessageV3::get_signer_info() const {
+    if (!this->is_signed_message()) {
+        return boost::none;
+    }
 
-        case SignerIdentifier_PR_digest:
-            to_return = vanetza::asn1::HashedId8_asn_to_HashedId8(this->message->content->choice.signedData->signer.choice.digest);
-            break;
-        case SignerIdentifier_PR_certificate:
-            SequenceOfCertificate_t certificates = this->message->content->choice.signedData->signer.choice.certificate;
-            if (certificates.list.size > 0){
-                std::list<CertificateVariant> before_to_return = std::list<CertificateVariant>();
-                for (int i=0;i<certificates.list.count; i++){
-                    Certificate_t* temp = reinterpret_cast<Certificate_t*>(certificates.list.array[i]);
-                    vanetza::ByteBuffer temp_buffer = vanetza::asn1::encode_oer(asn_DEF_Certificate, temp);
-                    before_to_return.push_back(CertificateV3(temp_buffer));
+    const SignerIdentifier_t &signer_identifier = this->message->content->choice.signedData->signer;
+    switch (signer_identifier.present)
+    {
+        case SignerIdentifier_PR_self: {
+            return SignerInfo(std::nullptr_t());
+        }
+        case SignerIdentifier_PR_digest: {
+            return SignerInfo(vanetza::asn1::HashedId8_asn_to_HashedId8(signer_identifier.choice.digest));
+        }
+        case SignerIdentifier_PR_certificate: {
+            const auto &certificates = this->message->content->choice.signedData->signer.choice.certificate.list;
+            if (certificates.count > 0){
+                auto to_return_certificates = std::list<CertificateVariant>();
+
+                for (int i = 0; i < certificates.count; i++) {
+                    const auto &temp = *certificates.array[i];
+                    vanetza::ByteBuffer temp_buffer = vanetza::asn1::encode_oer(asn_DEF_Certificate, &temp);
+                    to_return_certificates.push_back(CertificateV3(temp_buffer));
                 }
-                to_return = before_to_return;
+                return SignerInfo(std::move(to_return_certificates));
             }
-            break;
+            return boost::none;
+        }
+        default: {
+            return boost::none;
         }
     }
-    return to_return;
 }
 
 bool SecuredMessageV3::is_signer_digest() const{
@@ -364,7 +372,7 @@ std::list<HashedId3> SecuredMessageV3::get_inline_p2pcd_Request() const{
     return to_return;
 }
 
-vanetza::security::Signature SecuredMessageV3::get_signature() const
+boost::optional<security::Signature> SecuredMessageV3::get_signature() const
 {
     if (!this->is_signed_message()) {
         throw std::runtime_error("Message type is not signed");
@@ -386,11 +394,11 @@ vanetza::security::Signature SecuredMessageV3::get_signature() const
         result.R = vanetza::asn1::EccP384CurvePoint_to_EccPoint(signature.choice.ecdsaBrainpoolP384r1Signature.rSig);
         sSig = &signature.choice.ecdsaBrainpoolP384r1Signature.sSig;
     } else {
-        throw std::runtime_error("Unsupported signature type");
+        return boost::none;
     }
     result.s = vanetza::asn1::OCTET_STRING_to_ByteBuffer(*sSig);
 
-    return result;
+    return security::Signature(std::move(result));
 }
 
 vanetza::ByteBuffer SecuredMessageV3::get_payload() const{

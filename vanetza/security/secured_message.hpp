@@ -159,7 +159,7 @@ class SecuredMessageV3{
          * \brief Returns the signer info
          * \return Signer info
          */
-        SignerInfo get_signer_info() const;
+        boost::optional<SignerInfo> get_signer_info() const;
         /**
          * \brief Returns if the message is Signed with a digest
          * \return boolean
@@ -177,7 +177,7 @@ class SecuredMessageV3{
          * \brief Getter of the signature
          * \return Signature
          */
-        vanetza::security::Signature get_signature() const;
+        boost::optional<security::Signature> get_signature() const;
         /**
          * \brief Getter of the payload of the message
          * \return Bytebuffer of payload
