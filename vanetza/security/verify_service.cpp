@@ -547,8 +547,8 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     }
 
     // we can only check the generation location after we have identified the correct certificate
-    // ignore for certificate responses
-    if (its_aid != aid::SCR && !check_generation_location(secured_message, *signer)) {
+    // ignore for certificate management messages
+    if (its_aid != aid::SCR && its_aid != aid::CTL && its_aid != aid::CRL && !check_generation_location(secured_message, *signer)) {
         confirm.report = VerificationReport::Invalid_Certificate;
         confirm.certificate_validity = CertificateInvalidReason::Off_Region;
         return confirm;
