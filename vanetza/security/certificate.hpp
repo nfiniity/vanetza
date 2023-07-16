@@ -226,14 +226,9 @@ class CertificateV3{
         ~CertificateV3() = default;
         /**
          * \brief Constructor for the V1.3.1 Certificate.
-         * \param certificate EtsiTs103097Certificate wrapper
-         */
-        CertificateV3(vanetza::asn1::EtsiTs103097Certificate& certificate);
-        /**
-         * \brief Constructor for the V1.3.1 Certificate.
          * \param coer_certificate ByteBuffer with a COER encoded certificate
          */
-        CertificateV3(const vanetza::ByteBuffer &coer_certificate);
+        explicit CertificateV3(const vanetza::ByteBuffer &coer_certificate);
         /**
          * \brief Constructor for the V1.3.1 Certificate (used as a dummy for self-signed to save the curve name)
          * \param curve_name Curve name
@@ -243,7 +238,7 @@ class CertificateV3{
          * \brief Constructor for the V1.3.1 Certificate.
          * \param certificate Asn1c V1.3.1 certificate object
          */
-        CertificateV3(const Certificate_t& certificate);
+        explicit CertificateV3(const Certificate_t& certificate);
         /**
          * \brief Copy constructor for V1.3.1 Certificate
          * \param certificate Own object
@@ -296,8 +291,11 @@ class CertificateV3{
          * \return Vector of ITS-AID (in V1.3.1 called PsidSsp_t)
          */
         std::vector<const PsidSsp_t *> get_app_permissions() const;
+        /**
+         * \brief Returns the list of the issue permissions that the certificate has
+         * \return Vector of PsidGroupPermissions_t
          */
-        std::list<PsidSsp_t> get_app_permissions() const;
+        std::vector<const PsidGroupPermissions_t *> get_issue_permissions() const;
         /**
          * \brief Returns the buffer of the serialized part on which then can be computed the signature
          * \return The serialization of the ToBeSigned part of the Certificate

@@ -3,14 +3,10 @@
 #include <vanetza/security/certificate.hpp>
 #include <vanetza/security/length_coding.hpp>
 #include <vanetza/security/sha.hpp>
-#include <vanetza/security/signer_info.hpp>
 #include <vanetza/security/exception.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/variant/apply_visitor.hpp>
-#include <boost/variant/get.hpp>
 #include <boost/variant/static_visitor.hpp>
-#include <vanetza/asn1/etsi_certificate.hpp>
-#include <vanetza/asn1/ieee1609dot2_certificate.hpp>
 #include <vanetza/asn1/utils.hpp>
 #include <vanetza/geonet/units.hpp>
 #include <memory>
@@ -302,9 +298,7 @@ CertificateV3::CertificateV3(const std::string& curve_name): is_dummy_certificat
 
 CertificateV3::CertificateV3(const Certificate_t& certificate) {
     if(certificate.type == CertificateType_explicit){
-        vanetza::asn1::Ieee1609Dot2Certificate temp;
-        *temp = certificate;
-        vanetza::ByteBuffer buffer = temp.encode();
+        vanetza::ByteBuffer buffer = asn1::encode_oer(asn_DEF_Certificate, &certificate);
         this->certificate.decode(buffer);
     }
 }
