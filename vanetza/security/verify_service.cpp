@@ -9,6 +9,7 @@
 #include <vanetza/security/verify_service.hpp>
 #include <vanetza/security/sha.hpp>
 #include <vanetza/asn1/support/INTEGER.h>
+#include <vanetza/asn1/utils.hpp>
 #include <memory>
 #include <boost/optional.hpp>
 #include <chrono>
@@ -302,26 +303,33 @@ bool assign_permissions(const Certificate& certificate, VerifyConfirm& confirm)
 
 bool assign_permissions(const CertificateV3& certificate, VerifyConfirm& confirm)
 {
-    std::list<PsidSsp_t> app_prermissions = certificate.get_app_permissions();
+    const std::vector<const PsidSsp_t *> app_prermissions =
+        certificate.get_app_permissions();
 
-    std::list<PsidSsp_t>::iterator it;
-    for (it = app_prermissions.begin(); it != app_prermissions.end(); ++it){
-        if(it->psid == confirm.its_aid){
-            vanetza::ByteBuffer specific_permissions{};
-            switch (it->ssp->present)
-            {
-            case ServiceSpecificPermissions_PR_opaque:
-                specific_permissions = buffer_copy(it->ssp->choice.opaque);
-                break;
-            case ServiceSpecificPermissions_PR_bitmapSsp:
-                specific_permissions = buffer_copy(it->ssp->choice.bitmapSsp);
-                break;
-            default:
-                break;
-            }
-            confirm.permissions = specific_permissions;
+    for (const PsidSsp_t *const psid_ssp : app_prermissions) {
+        if (psid_ssp->psid != confirm.its_aid) {
+            continue;
+        }
+
+        confirm.permissions = {};
+        const ServiceSpecificPermissions_t *const ssp = psid_ssp->ssp;
+        if (nullptr == ssp) {
             return true;
         }
+
+        switch (ssp->present)
+        {
+        case ServiceSpecificPermissions_PR_opaque:
+            confirm.permissions = asn1::OCTET_STRING_to_ByteBuffer(ssp->choice.opaque);
+            break;
+        case ServiceSpecificPermissions_PR_bitmapSsp:
+            confirm.permissions = asn1::OCTET_STRING_to_ByteBuffer(ssp->choice.bitmapSsp);
+            break;
+        default:
+            break;
+        }
+
+        return true;
     }
     return false;
 }

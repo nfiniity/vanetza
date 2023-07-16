@@ -293,7 +293,9 @@ class CertificateV3{
         std::shared_ptr<GeographicRegion> get_geographic_region() const;
         /**
          * \brief Returns the list of the app permissions that the certificate has
-         * \return List of ITS-AID (in V1.3.1 called PsidSsp_t)
+         * \return Vector of ITS-AID (in V1.3.1 called PsidSsp_t)
+         */
+        std::vector<const PsidSsp_t *> get_app_permissions() const;
          */
         std::list<PsidSsp_t> get_app_permissions() const;
         /**

@@ -372,12 +372,21 @@ std::shared_ptr<GeographicRegion> CertificateV3::get_geographic_region() const
     return to_return;
 }
 
-std::list<PsidSsp_t> CertificateV3::get_app_permissions() const{
-    std::list<PsidSsp_t> to_return{};
-    int number_of_psid = this->certificate->toBeSigned.appPermissions->list.count;
-    if (number_of_psid > 0){
-        for (int i=0;i<number_of_psid; i++){
-            to_return.push_back(*this->certificate->toBeSigned.appPermissions->list.array[i]);
+std::vector<const PsidSsp_t*> CertificateV3::get_app_permissions() const{
+    const SequenceOfPsidSsp_t *app_permissions = this->certificate->toBeSigned.appPermissions;
+    if (nullptr == app_permissions) {
+        return {};
+    }
+
+    const int number_of_psid_ssps = app_permissions->list.count;
+    std::vector<const PsidSsp_t *> to_return(number_of_psid_ssps);
+    for (int i = 0; i < number_of_psid_ssps; i++) {
+        to_return[i] = app_permissions->list.array[i];
+    }
+
+    return to_return;
+}
+
         }
     }
     return to_return;
