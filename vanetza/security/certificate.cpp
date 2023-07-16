@@ -381,8 +381,45 @@ std::vector<const PsidSsp_t*> CertificateV3::get_app_permissions() const{
     return to_return;
 }
 
+CertIssuePermissions CertificateV3::get_issue_permissions() const {
+    CertIssuePermissions to_return;
+
+    const SequenceOfPsidGroupPermissions_t *issue_permissions =
+        this->certificate->toBeSigned.certIssuePermissions;
+    if (nullptr == issue_permissions) {
+        return to_return;
+    }
+
+    // Save the PSID Groups to a list of Psid_t -> SspRange_t* maps
+    const int number_of_psid_group_permissions = issue_permissions->list.count;
+    std::list<PsidSspRangeMap> &issue_permissions_map_list = to_return.psid_ssp_range_map_list;
+    for (int i = 0; i < number_of_psid_group_permissions; i++) {
+        const SubjectPermissions_t &subject_permissions =
+            issue_permissions->list.array[i]->subjectPermissions;
+
+        // Check if permissions are granted by default
+        if (subject_permissions.present == SubjectPermissions_PR_all) {
+            to_return.default_granted = true;
+            continue;
+        }
+        if (subject_permissions.present != SubjectPermissions_PR_explicit) {
+            continue;
+        }
+
+        // Save the PSID Group
+        const auto &explicit_permissions = subject_permissions.choice.Explicit.list;
+        if (explicit_permissions.count == 0) {
+            continue;
+        }
+        issue_permissions_map_list.emplace_back();
+        auto &psid_ssp_range_map = issue_permissions_map_list.back();
+        for (int j = 0; j < explicit_permissions.count; j++) {
+            const auto *psid_ssp_range = explicit_permissions.array[j];
+            psid_ssp_range_map[psid_ssp_range->psid] = psid_ssp_range->sspRange;
+            to_return.covered_psids.insert(psid_ssp_range->psid);
         }
     }
+
     return to_return;
 }
 

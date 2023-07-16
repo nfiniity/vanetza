@@ -216,6 +216,14 @@ boost::optional<ecdsa256::PublicKey> get_public_key(const Certificate&, Backend&
  */
 HashedId8 calculate_hash(const Certificate&);
 
+using PsidSspRangeMap = std::map<Psid_t, const SspRange_t *>;
+
+struct CertIssuePermissions {
+    std::list<PsidSspRangeMap> psid_ssp_range_map_list;
+    std::set<Psid_t> covered_psids;
+    bool default_granted = false;
+};
+
 // described in TS 103 097 v1.3.1 (2017-10)
 class CertificateV3{
     public:
@@ -295,7 +303,7 @@ class CertificateV3{
          * \brief Returns the list of the issue permissions that the certificate has
          * \return Vector of PsidGroupPermissions_t
          */
-        std::vector<const PsidGroupPermissions_t *> get_issue_permissions() const;
+        CertIssuePermissions get_issue_permissions() const;
         /**
          * \brief Returns the buffer of the serialized part on which then can be computed the signature
          * \return The serialization of the ToBeSigned part of the Certificate

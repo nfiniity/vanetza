@@ -163,8 +163,6 @@ bool check_permission_consistency(const Certificate& certificate, const Certific
     return check_permission_consistency_intern(certificate_aids, signer_aids);
 }
 
-using PsidSspRangeMap = std::map<Psid_t, const SspRange_t *>;
-
 bool contains_octet_string(const SequenceOfOctetString_t &sequence_of_octet_string, const OCTET_STRING_t &octet_string)
 {
     const auto &list = sequence_of_octet_string.list;
@@ -284,32 +282,12 @@ bool check_permission_consistency(const CertificateV3& certificate, const Certif
     // Validate certificate permissions, IEEE 1609.2-2022 Section 5.1.2.4 and 6.4.8
     // The field certRequestPermissions is not used for ETSI certificates
 
-    // Save the PSID Groups to a list of Psid_t -> SspRange_t* maps
-    // for easy comparison with the certificate permissions
     const auto signer_issue_permissions = signer.get_issue_permissions();
-    bool default_granted = false;
-    std::list<PsidSspRangeMap> signer_issue_permissions_map_list;
-    if (!signer_issue_permissions.empty()) {
-        for (const auto *const &psid_group_permissions: signer_issue_permissions) {
-            const auto &subject_permissions = psid_group_permissions->subjectPermissions;
-
-            // Check if permissions are granted by default
-            if (subject_permissions.present == SubjectPermissions_PR_all) {
-                default_granted = true;
-            } else if (subject_permissions.present != SubjectPermissions_PR_explicit) {
-                continue;
-            }
-
-            // Save the PSID Group
-            signer_issue_permissions_map_list.emplace_back();
-            auto &psid_ssp_range_map = signer_issue_permissions_map_list.back();
-            const auto &explicit_permissions = subject_permissions.choice.Explicit.list;
-            for (int i = 0; i < explicit_permissions.count; i++) {
-                const auto *psid_ssp_range = explicit_permissions.array[i];
-                psid_ssp_range_map[psid_ssp_range->psid] = psid_ssp_range->sspRange;
-            }
-        }
-    }
+    const auto &signer_issue_permissions_map_list =
+        signer_issue_permissions.psid_ssp_range_map_list;
+    const auto &signer_issue_permissions_covered_psids =
+        signer_issue_permissions.covered_psids;
+    const auto default_granted = signer_issue_permissions.default_granted;
 
     const auto certificate_app_permissions = certificate.get_app_permissions();
     if (!certificate_app_permissions.empty()) {
