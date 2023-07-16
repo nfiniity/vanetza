@@ -385,31 +385,6 @@ bool check_subject_assurance_consistency(const Certificate& certificate, const C
 
 }
 
-bool check_subject_assurance_consistency(const CertificateV3& certificate, const CertificateV3& signer)
-{
-    auto certificate_assurance = certificate.get_subject_assurance();
-    auto signer_assurance = signer.get_subject_assurance();
-    return check_subject_assurance_consistency_intern(certificate_assurance.get(), signer_assurance.get());
-}
-
-bool check_subject_assurance_consistency(const CertificateVariant& certificate, const CertificateVariant& signer){
-    struct canonical_visitor : public boost::static_visitor<const SubjectAssurance*>
-        {
-            const SubjectAssurance* operator()(const Certificate& cert) const
-            {
-                return cert.get_attribute<SubjectAttributeType::Assurance_Level>();
-            }
-
-            const SubjectAssurance* operator()(const CertificateV3& cert) const
-            {
-                return cert.get_subject_assurance().get();
-            }
-        };
-    auto certificate_assurance = boost::apply_visitor(canonical_visitor(), certificate);
-    auto signer_assurance = boost::apply_visitor(canonical_visitor(), signer);
-    return check_subject_assurance_consistency_intern(certificate_assurance, signer_assurance);
-}
-
 bool check_region_consistency_intern(const GeographicRegion* certificate_region, const GeographicRegion* signer_region) {
     if (!signer_region) {
         return true;
@@ -487,10 +462,6 @@ bool check_consistency(const CertificateV3& certificate, const CertificateV3& si
         return false;
     }
 
-    if (!check_subject_assurance_consistency(certificate, signer)) {
-        return false;
-    }
-
     if (!check_region_consistency(certificate, signer)) {
         return false;
     }
@@ -500,23 +471,29 @@ bool check_consistency(const CertificateV3& certificate, const CertificateV3& si
 
 bool check_consistency(const CertificateVariant& certificate, const CertificateVariant& signer)
 {
-    if (!check_time_consistency(certificate, signer)) {
+    struct canonical_visitor : public boost::static_visitor<bool>
+        {
+            bool operator()(const Certificate& cert, const Certificate& signer) const
+            {
+                return check_consistency(cert, signer);
+    }
+
+            bool operator()(const CertificateV3& cert, const CertificateV3& signer) const
+            {
+                return check_consistency(cert, signer);
+    }
+
+            bool operator()(const Certificate&, const CertificateV3&) const
+            {
         return false;
     }
 
-    if (!check_permission_consistency(certificate, signer)) {
+            bool operator()(const CertificateV3&, const Certificate&) const
+            {
         return false;
     }
-
-    if (!check_subject_assurance_consistency(certificate, signer)) {
-        return false;
-    }
-
-    if (!check_region_consistency(certificate, signer)) {
-        return false;
-    }
-
-    return true;
+        };
+    return boost::apply_visitor(canonical_visitor(), certificate, signer);
 }
 
 } // namespace
