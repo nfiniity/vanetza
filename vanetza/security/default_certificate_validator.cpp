@@ -147,48 +147,6 @@ std::list<ItsAid> extract_application_identifiers(const Certificate& certificate
     return aids;
 }
 
-std::list<ItsAid> extract_application_identifiers(const CertificateV3& certificate)
-{
-    std::list<ItsAid> aids;
-    std::list<PsidSsp_t> psid_ssp_list = certificate.get_app_permissions();
-    for (PsidSsp_t psid_ssp : psid_ssp_list){
-        aids.push_back(ItsAid(psid_ssp.psid));
-        // Check how to handle ssp
-        if(psid_ssp.ssp){
-            switch (psid_ssp.ssp->present)
-            {
-            case ServiceSpecificPermissions_PR_opaque:
-                // TODO
-                break;
-
-            case ServiceSpecificPermissions_PR_bitmapSsp:
-                //TODO
-                break;
-            default:
-                break;
-            }
-        }
-    }
-
-    return aids;
-}
-
-std::list<ItsAid> extract_application_identifiers(const CertificateVariant& certificate){
-    struct canonical_visitor : public boost::static_visitor<std::list<ItsAid>>
-        {
-            std::list<ItsAid> operator()(const Certificate& cert) const
-            {
-                return extract_application_identifiers(cert);
-            }
-
-            std::list<ItsAid> operator()(const CertificateV3& cert) const
-            {
-                return extract_application_identifiers(cert);
-            }
-        };
-    return boost::apply_visitor(canonical_visitor(), certificate);
-}
-
 bool check_permission_consistency_intern(std::list<ItsAid>& certificate_aids, std::list<ItsAid>& signer_aids){
     auto compare = [](ItsAid a, ItsAid b) { return a < b; };
 
@@ -205,17 +163,201 @@ bool check_permission_consistency(const Certificate& certificate, const Certific
     return check_permission_consistency_intern(certificate_aids, signer_aids);
 }
 
-bool check_permission_consistency(const CertificateV3& certificate, const CertificateV3& signer)
+using PsidSspRangeMap = std::map<Psid_t, const SspRange_t *>;
+
+bool contains_octet_string(const SequenceOfOctetString_t &sequence_of_octet_string, const OCTET_STRING_t &octet_string)
 {
-    auto certificate_aids = extract_application_identifiers(certificate);
-    auto signer_aids = extract_application_identifiers(signer);
-    return check_permission_consistency_intern(certificate_aids, signer_aids);
+    const auto &list = sequence_of_octet_string.list;
+    for (int i = 0; i < list.count; i++) {
+        if (OCTET_STRING_compare(&asn_DEF_OCTET_STRING, list.array[i], &octet_string) == 0) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
-bool check_permission_consistency(const CertificateVariant& certificate, const CertificateVariant& signer){
-    auto certificate_aids = extract_application_identifiers(certificate);
-    auto signer_aids = extract_application_identifiers(signer);
-    return check_permission_consistency_intern(certificate_aids, signer_aids);
+bool contains_empty_octet_string(const SequenceOfOctetString_t &sequence_of_octet_string)
+{
+    const auto &list = sequence_of_octet_string.list;
+    for (int i = 0; i < list.count; i++) {
+        if (list.array[i]->size == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool validate_bitmap_ssp(const BitmapSspRange_t &signer_ssp_range, const BitmapSsp_t &certificate_ssp)
+{
+    // The bitmask in the signer SSP range restricts the certificate SSP.
+    // For every bit set in the bitmask, the corresponding bits of
+    // the certificate SSP and the signer SSP range value field must be equal.
+
+    const auto &signer_ssp_range_bitmask = signer_ssp_range.sspBitmask;
+    const auto &signer_ssp_range_value = signer_ssp_range.sspValue;
+    const auto &certificate_ssp_value = certificate_ssp;
+
+    // Check lenghts
+    if (signer_ssp_range_value.size != certificate_ssp_value.size ||
+        signer_ssp_range_bitmask.size != certificate_ssp_value.size) {
+        return false;
+    }
+
+    // Check values
+    for (size_t i = 0; i < certificate_ssp_value.size; i++) {
+        if ((signer_ssp_range_bitmask.buf[i] & certificate_ssp_value.buf[i]) !=
+            (signer_ssp_range_bitmask.buf[i] & signer_ssp_range_value.buf[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool validate_app_permisions_on_psid_group_permissions(
+    const std::vector<const PsidSsp_t *> &certificate_app_permissions,
+    const PsidSspRangeMap &signer_issue_permissions_map,
+    bool default_granted)
+{
+    // Check if the certificate application permissions are consistent with the
+    // signer issue permissions
+    for (const auto &certificate_app_permission : certificate_app_permissions) {
+        // Find the PSID in the signer issue permissions
+        const auto signer_issue_ssp_range =
+            signer_issue_permissions_map.find(certificate_app_permission->psid);
+
+        // If the PSID is not found, check if all permissions are allowed by default
+        if (signer_issue_ssp_range == signer_issue_permissions_map.end()) {
+            if (default_granted) {
+                continue;
+            } else {
+                return false;
+            }
+        }
+
+        // Check if the signer allows all permissions for the PSID
+        const auto &signer_ssp_range = signer_issue_ssp_range->second;
+        if (nullptr == signer_ssp_range || signer_ssp_range->present == SspRange_PR_all) {
+            continue;
+        }
+
+        // If the SSP in the application permission is omitted,
+        // check for a issuer SSP range of type "opaque".
+        // It should contain an empty octet string,
+        // see IEEE 1609.2-2022 Section 6.4.28.
+        const auto &certificate_app_ssp = certificate_app_permission->ssp;
+        if (nullptr == certificate_app_ssp) {
+            if (signer_ssp_range->present == SspRange_PR_opaque &&
+                contains_empty_octet_string(signer_ssp_range->choice.opaque)) {
+                continue;
+            } else {
+                return false;
+            }
+        }
+
+        // Validation of opaque and bitmap application permission types
+        // See IEEE 1609.2-2022 Section 6.4.29 and 6.4.30
+        if (certificate_app_ssp->present == ServiceSpecificPermissions_PR_opaque &&
+            signer_ssp_range->present == SspRange_PR_opaque &&
+            contains_octet_string(
+                signer_ssp_range->choice.opaque, certificate_app_ssp->choice.opaque)) {
+            continue;
+        }
+
+        if (certificate_app_ssp->present == ServiceSpecificPermissions_PR_bitmapSsp &&
+            signer_ssp_range->present == SspRange_PR_bitmapSspRange &&
+            validate_bitmap_ssp(signer_ssp_range->choice.bitmapSspRange,
+                                certificate_app_ssp->choice.bitmapSsp)) {
+            continue;
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+bool check_permission_consistency(const CertificateV3& certificate, const CertificateV3& signer)
+{
+    // Validate certificate permissions, IEEE 1609.2-2022 Section 5.1.2.4 and 6.4.8
+    // The field certRequestPermissions is not used for ETSI certificates
+
+    // Save the PSID Groups to a list of Psid_t -> SspRange_t* maps
+    // for easy comparison with the certificate permissions
+    const auto signer_issue_permissions = signer.get_issue_permissions();
+    bool default_granted = false;
+    std::list<PsidSspRangeMap> signer_issue_permissions_map_list;
+    if (!signer_issue_permissions.empty()) {
+        for (const auto *const &psid_group_permissions: signer_issue_permissions) {
+            const auto &subject_permissions = psid_group_permissions->subjectPermissions;
+
+            // Check if permissions are granted by default
+            if (subject_permissions.present == SubjectPermissions_PR_all) {
+                default_granted = true;
+            } else if (subject_permissions.present != SubjectPermissions_PR_explicit) {
+                continue;
+            }
+
+            // Save the PSID Group
+            signer_issue_permissions_map_list.emplace_back();
+            auto &psid_ssp_range_map = signer_issue_permissions_map_list.back();
+            const auto &explicit_permissions = subject_permissions.choice.Explicit.list;
+            for (int i = 0; i < explicit_permissions.count; i++) {
+                const auto *psid_ssp_range = explicit_permissions.array[i];
+                psid_ssp_range_map[psid_ssp_range->psid] = psid_ssp_range->sspRange;
+            }
+        }
+    }
+
+    const auto certificate_app_permissions = certificate.get_app_permissions();
+    if (!certificate_app_permissions.empty()) {
+        // Validate application permissions, try every signer issue PSID Group
+        bool certificate_app_permissions_granted = false;
+        for (const auto &signer_issue_permissions_map: signer_issue_permissions_map_list) {
+            certificate_app_permissions_granted =
+                validate_app_permisions_on_psid_group_permissions(
+                    certificate_app_permissions, signer_issue_permissions_map,
+                    default_granted);
+            if (certificate_app_permissions_granted) {
+                break;
+            }
+        }
+
+        if (!certificate_app_permissions_granted) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool check_permission_consistency(const CertificateVariant& certificateVariant, const CertificateVariant& signerVariant)
+{
+    struct canonical_visitor : public boost::static_visitor<bool>
+        {
+            bool operator()(const Certificate& certificate, const Certificate& signer) const
+            {
+                return check_permission_consistency(certificate, signer);
+            }
+
+            bool operator()(const CertificateV3& certificate, const CertificateV3& signer) const
+            {
+                return check_permission_consistency(certificate, signer);
+            }
+
+            bool operator()(const Certificate&, const CertificateV3&) const
+            {
+                return false;
+            }
+
+            bool operator()(const CertificateV3&, const Certificate&) const
+            {
+                return false;
+            }
+        };
+    return boost::apply_visitor(canonical_visitor(), certificateVariant, signerVariant);
 }
 
 bool check_subject_assurance_consistency_intern(const SubjectAssurance* certificate_assurance, const SubjectAssurance* signer_assurance){
