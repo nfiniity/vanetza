@@ -214,9 +214,11 @@ bool validate_bitmap_ssp(const BitmapSspRange_t &signer_ssp_range, const BitmapS
     return true;
 }
 
-bool validate_app_permisions_on_psid_group_permissions(
+
+bool validate_app_permissions_on_psid_group_permissions(
     const std::vector<const PsidSsp_t *> &certificate_app_permissions,
     const PsidSspRangeMap &signer_issue_permissions_map,
+    const std::set<Psid_t> &signer_issue_permissions_covered_psids,
     bool default_granted)
 {
     // Check if the certificate application permissions are consistent with the
@@ -227,12 +229,14 @@ bool validate_app_permisions_on_psid_group_permissions(
             signer_issue_permissions_map.find(certificate_app_permission->psid);
 
         // If the PSID is not found, check if all permissions are allowed by default
+        // and if the PSID is not covered by any other issue group
         if (signer_issue_ssp_range == signer_issue_permissions_map.end()) {
-            if (default_granted) {
+            bool psid_covered = signer_issue_permissions_covered_psids.find(certificate_app_permission->psid) !=
+                                signer_issue_permissions_covered_psids.end();
+            if (default_granted && !psid_covered) {
                 continue;
-            } else {
-                return false;
             }
+            return false;
         }
 
         // Check if the signer allows all permissions for the PSID
@@ -250,9 +254,8 @@ bool validate_app_permisions_on_psid_group_permissions(
             if (signer_ssp_range->present == SspRange_PR_opaque &&
                 contains_empty_octet_string(signer_ssp_range->choice.opaque)) {
                 continue;
-            } else {
-                return false;
             }
+            return false;
         }
 
         // Validation of opaque and bitmap application permission types
@@ -277,6 +280,7 @@ bool validate_app_permisions_on_psid_group_permissions(
     return true;
 }
 
+
 bool check_permission_consistency(const CertificateV3& certificate, const CertificateV3& signer)
 {
     // Validate certificate permissions, IEEE 1609.2-2022 Section 5.1.2.4 and 6.4.8
@@ -295,9 +299,9 @@ bool check_permission_consistency(const CertificateV3& certificate, const Certif
         bool certificate_app_permissions_granted = false;
         for (const auto &signer_issue_permissions_map: signer_issue_permissions_map_list) {
             certificate_app_permissions_granted =
-                validate_app_permisions_on_psid_group_permissions(
+                validate_app_permissions_on_psid_group_permissions(
                     certificate_app_permissions, signer_issue_permissions_map,
-                    default_granted);
+                    signer_issue_permissions_covered_psids, default_granted);
             if (certificate_app_permissions_granted) {
                 break;
             }
