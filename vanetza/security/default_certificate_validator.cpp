@@ -187,6 +187,18 @@ bool contains_empty_octet_string(const SequenceOfOctetString_t &sequence_of_octe
     return false;
 }
 
+bool is_subset_octet_string(const SequenceOfOctetString_t &set, const SequenceOfOctetString_t &subset)
+{
+    const auto &subset_list = subset.list;
+    for (int i = 0; i < subset_list.count; i++) {
+        if (!contains_octet_string(set, *subset_list.array[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool validate_bitmap_ssp(const BitmapSspRange_t &signer_ssp_range, const BitmapSsp_t &certificate_ssp)
 {
     // The bitmask in the signer SSP range restricts the certificate SSP.
@@ -214,6 +226,32 @@ bool validate_bitmap_ssp(const BitmapSspRange_t &signer_ssp_range, const BitmapS
     return true;
 }
 
+bool validate_bitmap_ssp_range(const BitmapSspRange_t &signer_ssp_range, const BitmapSspRange_t &certificate_ssp_range)
+{
+    // Validate values
+    if (!validate_bitmap_ssp(signer_ssp_range, certificate_ssp_range.sspValue)) {
+        return false;
+    }
+
+    // Validate bitmasks
+    const auto &signer_ssp_range_bitmask = signer_ssp_range.sspBitmask;
+    const auto &certificate_ssp_range_bitmask = certificate_ssp_range.sspBitmask;
+
+    // Check lenghts
+    if (signer_ssp_range_bitmask.size != certificate_ssp_range_bitmask.size) {
+        return false;
+    }
+
+    // Check that the certificate bitmask is a subset of the signer bitmask
+    for (size_t i = 0; i < certificate_ssp_range_bitmask.size; i++) {
+        if ((signer_ssp_range_bitmask.buf[i] & certificate_ssp_range_bitmask.buf[i]) !=
+            certificate_ssp_range_bitmask.buf[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 bool validate_app_permissions_on_psid_group_permissions(
     const std::vector<const PsidSsp_t *> &certificate_app_permissions,
@@ -280,6 +318,62 @@ bool validate_app_permissions_on_psid_group_permissions(
     return true;
 }
 
+bool validate_issue_permissions_group(
+    const PsidSspRangeMap &certificate_issue_permissions_map,
+    const PsidSspRangeMap &signer_issue_permissions_map,
+    const std::set<Psid_t> &signer_issue_permissions_covered_psids,
+    bool default_granted)
+{
+    // Check if the certificate issue permissions group is consistent with the
+    // signer issue permission group
+
+    // Validate all issue permissions in the group
+    for (const auto &certificate_issue_permission : certificate_issue_permissions_map) {
+        const auto &psid = certificate_issue_permission.first;
+        const auto &ssp_range = certificate_issue_permission.second;
+
+        // Find the PSID in the signer issue permissions
+        const auto signer_issue_ssp_range = signer_issue_permissions_map.find(psid);
+
+        // If the PSID is not found, check if all permissions are allowed by default
+        // and if the PSID is not covered by any other issue group
+        if (signer_issue_ssp_range == signer_issue_permissions_map.end()) {
+            bool psid_covered = signer_issue_permissions_covered_psids.find(psid) !=
+                                signer_issue_permissions_covered_psids.end();
+            if (default_granted && !psid_covered) {
+                continue;
+            }
+            return false;
+        }
+
+        // Check if the signer allows all permissions for the PSID
+        const auto &signer_ssp_range = signer_issue_ssp_range->second;
+        if (nullptr == signer_ssp_range || signer_ssp_range->present == SspRange_PR_all) {
+            continue;
+        }
+
+        // Validation of opaque and bitmap ssp range types
+        // See IEEE 1609.2-2022 Section 6.4.35 and 6.4.36
+        if (ssp_range->present == SspRange_PR_opaque &&
+            signer_ssp_range->present == SspRange_PR_opaque &&
+            is_subset_octet_string(
+                signer_ssp_range->choice.opaque, ssp_range->choice.opaque)) {
+            continue;
+        }
+
+        if (ssp_range->present == SspRange_PR_bitmapSspRange &&
+            signer_ssp_range->present == SspRange_PR_bitmapSspRange &&
+            validate_bitmap_ssp_range(
+                signer_ssp_range->choice.bitmapSspRange,
+                ssp_range->choice.bitmapSspRange)) {
+            continue;
+        }
+
+        return false;
+    }
+
+    return true;
+}
 
 bool check_permission_consistency(const CertificateV3& certificate, const CertificateV3& signer)
 {
@@ -309,6 +403,41 @@ bool check_permission_consistency(const CertificateV3& certificate, const Certif
 
         if (!certificate_app_permissions_granted) {
             return false;
+        }
+    }
+
+    // Validate issue permissions
+    const auto certificate_issue_permissions = certificate.get_issue_permissions();
+    const auto &certificate_issue_permissions_map_list =
+        certificate_issue_permissions.psid_ssp_range_map_list;
+
+    // If the cert permission indicates all permissions,
+    // check if the signer allows it, see IEEE 1609.2-2022 Section 6.4.32
+    // for the semantics of the all permissions value
+    if (certificate_issue_permissions.default_granted && !default_granted) {
+        return false;
+    }
+
+    if (!certificate_issue_permissions_map_list.empty()) {
+        // For every issue permissions group in the certificate,
+        // check if it is consistent with any signer issue permissions group
+        for (const auto &certificate_issue_permission_map: certificate_issue_permissions_map_list) {
+            bool certificate_issue_permission_granted = false;
+            for (const auto &signer_issue_permissions_map: signer_issue_permissions_map_list) {
+                certificate_issue_permission_granted =
+                    validate_issue_permissions_group(
+                        certificate_issue_permission_map,
+                        signer_issue_permissions_map,
+                        signer_issue_permissions_covered_psids,
+                        default_granted);
+                if (certificate_issue_permission_granted) {
+                    break;
+                }
+            }
+
+            if (!certificate_issue_permission_granted) {
+                return false;
+            }
         }
     }
 
