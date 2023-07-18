@@ -17,6 +17,7 @@
 #include <boost/variant/get.hpp>
 #include <vanetza/asn1/etsi_certificate.hpp>
 #include <vanetza/asn1/security/Certificate.h>
+#include <set>
 
 namespace vanetza
 {

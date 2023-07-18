@@ -476,7 +476,7 @@ HashedId8 CertificateV3::get_issuer_identifier() const{
 	case IssuerIdentifier_PR_sha256AndDigest:
         return vanetza::asn1::HashedId8_asn_to_HashedId8(this->certificate->issuer.choice.sha256AndDigest);
 	case IssuerIdentifier_PR_self:
-        // Check if this is a dummy certificate (no changes made)
+        // Check if this is a dummy certificate
         if (this->is_dummy_certificate) {
             return HashedId8{{0, 0, 0, 0, 0, 0, 0, 0}};
         }
