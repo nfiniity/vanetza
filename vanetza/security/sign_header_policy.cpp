@@ -163,7 +163,7 @@ void DefaultSignHeaderPolicy::prepare_headers(const SignRequest& request, Certif
         m_chain_requested = false;
     } else if (request.its_aid == aid::SCR) {
         // Section 6.2.3.2.1 TS 102 941 V1.4.1
-        auto cert = boost::get<CertificateV3>(certificate_provider.own_certificate());
+        auto &cert = boost::get<CertificateV3>(certificate_provider.own_certificate());
         HashedId8 issuer_identifier = cert.get_issuer_identifier();
 
         SignerInfo signer_info = std::nullptr_t();
