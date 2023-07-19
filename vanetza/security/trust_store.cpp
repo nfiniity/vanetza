@@ -23,7 +23,7 @@ void TrustStore::insert(const CertificateVariant& certificate)
     m_certificates.insert(std::make_pair(id, certificate));
 }
 
-std::list<CertificateVariant> TrustStore::lookup(HashedId8 id) const
+std::list<CertificateVariant> TrustStore::lookup(const HashedId8& id) const
 {
     using iterator = std::multimap<HashedId8, CertificateVariant>::const_iterator;
     std::pair<iterator, iterator> range = m_certificates.equal_range(id);

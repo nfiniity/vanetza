@@ -753,7 +753,16 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
 
     // authorization authorities may only be signed by root CAs
     // Note: There's no clear specification about this, but there's a test for it in 5.2.7.12.4 of TS 103 096-2 V1.3.1
-    for (auto& possible_signer : m_trust_store.lookup(signer_hash)) {
+
+    auto trust_store_matches = m_trust_store.lookup(signer_hash);
+    if (trust_store_matches.empty()) {
+        return CertificateInvalidReason::Unknown_Signer;
+    }
+    if (m_trust_store.is_revoked(signer_hash, certificate.calculate_hash())) {
+        return CertificateInvalidReason::Revoked;
+    }
+
+    for (auto& possible_signer : trust_store_matches) {
         CertificateV3 signer_cert = boost::get<CertificateV3>(possible_signer);
         auto verification_key = signer_cert.get_public_key(m_crypto_backend);
         auto curve_name = signer_cert.get_public_key_curve_name();

@@ -113,6 +113,7 @@ enum class CertificateInvalidReason
     Inconsistent_With_Signer,
     Insufficient_ITS_AID,
     Missing_Subject_Assurance,
+    Revoked,
 };
 
 class CertificateValidity
