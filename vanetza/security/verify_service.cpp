@@ -214,8 +214,8 @@ bool check_certificate_time(const Certificate& certificate, Clock::time_point no
 
 bool check_certificate_time(const CertificateV3& certificate, Clock::time_point now)
 {
-    auto time = new vanetza::security::StartAndEndValidity(certificate.get_start_and_end_validity());
-    return check_certificate_time_intern(time, now);
+    auto time = certificate.get_start_and_end_validity();
+    return check_certificate_time_intern(&time, now);
 } // Test to be written
 
 bool check_certificate_time(CertificateVariant& certificate, Clock::time_point now)
