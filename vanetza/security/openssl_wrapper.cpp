@@ -399,7 +399,7 @@ void EvpKey::write_key(const std::string &file_name, int type) const
         throw std::runtime_error("Could not open file");
     }
 
-    OSSL_ENCODER_CTX *ectx = OSSL_ENCODER_CTX_new_for_pkey(evpKey, EVP_PKEY_KEYPAIR, "DER", nullptr, nullptr);
+    OSSL_ENCODER_CTX *ectx = OSSL_ENCODER_CTX_new_for_pkey(evpKey, type, "DER", nullptr, nullptr);
     vanetza::security::openssl::check(ectx != nullptr &&
                                       1 == OSSL_ENCODER_to_fp(ectx, fp));
 
