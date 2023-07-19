@@ -53,6 +53,8 @@ CertificateV3 load_certificate_from_file_v3(const std::string& certificate_path)
  */
 void save_certificate_to_file(const std::string& certificate_path, const Certificate& certificate);
 
+void save_certificate_to_file(const std::string& certificate_path, const CertificateV3& certificate);
+
 } // namespace security
 } // namespace vanetza
 

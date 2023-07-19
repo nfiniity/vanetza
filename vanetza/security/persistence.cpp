@@ -148,5 +148,12 @@ void save_certificate_to_file(const std::string& certificate_path, const Certifi
     serialize(archive, certificate);
 }
 
+void save_certificate_to_file(const std::string& certificate_path, const CertificateV3& certificate)
+{
+    ByteBuffer certificate_buffer = certificate.serialize();
+    std::ofstream dest(certificate_path.c_str(), std::ios::out | std::ios::binary);
+    dest.write(reinterpret_cast<const char*>(certificate_buffer.data()), certificate_buffer.size());
+}
+
 } // namespace security
 } // namespace vanetza
