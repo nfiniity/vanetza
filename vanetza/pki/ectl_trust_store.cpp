@@ -16,9 +16,13 @@ namespace pki
 {
 
 EctlPaths::EctlPaths(const std::string &base_path)
-    : ctl(base_path + "ctl/"), tlm_cert(ctl + "tlm_cert.oer"), ectl(ctl + "ectl.oer"),
-      crl(base_path + "crl/"), reg(base_path + "reg/"), ec(base_path + "ec/"),
-      at(base_path + "at/") {}
+    : ctl(base_path + "ctl/"), tlm_cert(ctl + "tlm_cert.oer"),
+      ectl(ctl + "ectl.oer"), crl(base_path + "crl/"), reg(base_path + "reg/"),
+      reg_key(reg + "reg_key.der"), ec(base_path + "ec/"), at(base_path + "at/")
+{
+    // Initialize directories
+    create_directories();
+}
 
 void EctlPaths::create_directories() const {
     boost::filesystem::create_directories(ctl);
@@ -28,15 +32,12 @@ void EctlPaths::create_directories() const {
     boost::filesystem::create_directories(at);
 }
 
-EctlTrustStore::EctlTrustStore(const std::string &base_path,
+EctlTrustStore::EctlTrustStore(const EctlPaths &paths,
                                const Runtime &runtime,
                                security::Backend &backend,
                                const std::string &cpoc_url)
-    : paths(base_path), runtime(runtime), backend(backend), cpoc_url(cpoc_url), curl(runtime)
+    : paths(paths), runtime(runtime), backend(backend), cpoc_url(cpoc_url), curl(runtime)
 {
-    // Initialize directories
-    paths.create_directories();
-
     // Load TLM certificate and ECTL
     refresh_ectl();
 }

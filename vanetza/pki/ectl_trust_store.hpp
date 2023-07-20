@@ -17,20 +17,26 @@ namespace pki
 {
 
 struct EctlPaths {
+    /*
+     * Construct ECTL paths
+     * \param base_path Base path for ECTL storage (with trailing slash)
+     */
     explicit EctlPaths(const std::string &base_path);
 
     void create_directories() const;
 
-    // TLM cert and ECTL cache directory
+    // TLM cert and ECTL cache directory (base_path/ctl/)
     std::string ctl;
-    // TLM cert
+    // TLM cert (base_path/ctl/tlm_cert.oer)
     std::string tlm_cert;
-    // ECTL
+    // ECTL cache (base_path/ctl/ectl.oer)
     std::string ectl;
-    // RCA CRLs cache directory
+    // RCA CRLs cache directory (base_path/crl/)
     std::string crl;
-    // Registration id and key directory
+    // Registration key directory (base_path/reg/)
     std::string reg;
+    // Registration key (base_path/reg/reg_key.der)
+    std::string reg_key;
     // Enrollment certificate and key directory
     std::string ec;
     // Authorization tickets and keys directory
@@ -50,11 +56,11 @@ class EctlTrustStore : public security::TrustStore
 public:
     /*
      * A trust store with root certificates from the ECTL
-     * \param base_path Base path for ECTL storage (with trailing slash)
+     * \param paths ECTL paths
      * \param runtime Runtime instance
      * \param cpoc_url URL of CPOC server (with trailing slash)
      */
-    EctlTrustStore(const std::string &base_path,
+    EctlTrustStore(const EctlPaths &paths,
                    const Runtime &runtime,
                    security::Backend &backend,
                    const std::string &cpoc_url = L0_CPOC_URL);
@@ -78,7 +84,7 @@ public:
         const boost::optional<asn1::ToBeSignedTlmCtl> &cached_ectl,
         const boost::optional<security::Sha384Digest> &buffer_hash);
 
-    EctlPaths paths;
+    const EctlPaths &paths;
     const Runtime &runtime;
     security::Backend &backend;
     std::string cpoc_url;
