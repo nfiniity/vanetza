@@ -22,7 +22,7 @@ public:
      * \param id hash identifier of the certificate
      * \return all stored certificates matching the passed identifier
      */
-    std::list<CertificateVariant> lookup(const HashedId8& id) const;
+    virtual std::list<CertificateVariant> lookup(const HashedId8& id);
 
     /**
      * Insert a certificate into store, i.e. consider it as trustworthy.

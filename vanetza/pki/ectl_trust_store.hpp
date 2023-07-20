@@ -84,6 +84,15 @@ public:
                    const std::string &cpoc_url = L0_CPOC_URL);
     ~EctlTrustStore() override = default;
 
+    /**
+     * Lookup certificates based on the passed HashedId8.
+     *
+     * \param id hash identifier of the certificate
+     * \return all stored certificates matching the passed identifier
+     */
+    std::list<security::CertificateVariant>
+    lookup(const security::HashedId8 &id) override;
+
     /*
      * Check if a subcertificate is revoked
      * \param rca_id issuer ID of subcertificate
@@ -118,16 +127,16 @@ public:
         const boost::optional<security::Sha384Digest> &buffer_hash);
 
     boost::optional<asn1::ToBeSignedRcaCtl>
-    parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id) const;
+    parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id);
     boost::optional<SubCertificateV3>
     find_subcert(const asn1::ToBeSignedRcaCtl &rca_ctl, const security::HashedId8 &cert_id) const;
 
     const EctlPaths &paths;
     const Runtime &runtime;
+    CurlWrapper& curl;
     security::Backend &backend;
     std::string cpoc_url;
 
-    CurlWrapper& curl;
     boost::optional<security::CertificateV3> tlm_cert;
     // Hash of ECTL buffer the store was loaded from
     boost::optional<security::Sha384Digest> ectl_buffer_hash;

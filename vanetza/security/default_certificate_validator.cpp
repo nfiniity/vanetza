@@ -612,7 +612,7 @@ bool check_consistency(const CertificateVariant& certificate, const CertificateV
 
 DefaultCertificateValidator::DefaultCertificateValidator(
     Backend &backend, boost::optional<CertificateCache &> cert_cache,
-    const TrustStore &trust_store)
+    TrustStore &trust_store)
     : m_crypto_backend(backend), m_cert_cache(cert_cache),
       m_trust_store(trust_store) {}
 

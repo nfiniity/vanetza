@@ -55,6 +55,13 @@ EctlTrustStore::EctlTrustStore(const EctlPaths &paths, const Runtime &runtime,
     refresh_ectl();
 }
 
+std::list<security::CertificateVariant>
+EctlTrustStore::lookup(const security::HashedId8 &id)
+{
+    refresh_ectl();
+    return TrustStore::lookup(id);
+}
+
 bool EctlTrustStore::refresh_tlm_cert()
 {
     bool loaded_from_cache = false;

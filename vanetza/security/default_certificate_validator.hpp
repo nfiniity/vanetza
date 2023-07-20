@@ -26,7 +26,7 @@ class CertificateCacheV3;
 class DefaultCertificateValidator : public CertificateValidator
 {
 public:
-    DefaultCertificateValidator(Backend&, boost::optional<CertificateCache&>, const TrustStore&);
+    DefaultCertificateValidator(Backend&, boost::optional<CertificateCache&>, TrustStore&);
 
     /**
      * \brief check certificate
@@ -50,7 +50,7 @@ public:
 private:
     Backend& m_crypto_backend;
     boost::optional<CertificateCache&> m_cert_cache;
-    const TrustStore& m_trust_store;
+    TrustStore& m_trust_store;
 };
 
 } // namespace security
