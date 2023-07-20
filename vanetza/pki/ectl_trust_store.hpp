@@ -6,7 +6,7 @@
 #include <vanetza/security/sha.hpp>
 #include <vanetza/security/security_entity.hpp>
 #include <vanetza/common/runtime.hpp>
-#include <vanetza/asn1/to_be_signed_tlm_ctl.hpp>
+#include <vanetza/asn1/ctl.hpp>
 #include <curl/curl.h>
 #include <set>
 #include <map>
@@ -49,6 +49,22 @@ struct RcaMetadata
     std::set<security::HashedId8> revoked_ids;
 };
 
+enum class SubCaType
+{
+    EA,
+    AA
+};
+
+struct SubCertificateV3
+{
+    // Certificate
+    security::CertificateV3 certificate;
+    // URL of AA access point or EA ITS access point
+    boost::optional<std::string> access_point_url;
+    // Type of sub CA
+    SubCaType type;
+};
+
 static const std::string L0_CPOC_URL = "https://cpoc.jrc.ec.europa.eu/L0/";
 
 class EctlTrustStore : public security::TrustStore
@@ -66,8 +82,22 @@ public:
                    const std::string &cpoc_url = L0_CPOC_URL);
     ~EctlTrustStore() override = default;
 
-    bool is_revoked(const security::HashedId8 &issuer_id,
+    /*
+     * Check if a subcertificate is revoked
+     * \param rca_id issuer ID of subcertificate
+     * \param cert_id certificate ID of subcertificate
+     */
+    bool is_revoked(const security::HashedId8 &rca_id,
                     const security::HashedId8 &cert_id) const override;
+
+    /*
+     * Request a subcertificate from a RCA directly
+     * \param rca_id issuer ID of subcertificate
+     * \param cert_id certificate ID of subcertificate
+     */
+    boost::optional<SubCertificateV3>
+    get_subcert(const security::HashedId8 &rca_id,
+                const security::HashedId8 &cert_id);
 
   private:
     /*
@@ -77,12 +107,18 @@ public:
     bool refresh_tlm_cert();
     void refresh_ectl();
     void set_next_tlm_cert_update();
-    Clock::time_point calc_next_ectl_update(const asn1::ToBeSignedTlmCtl &ectl) const;
-    boost::optional<asn1::ToBeSignedTlmCtl> parse_ectl(const ByteBuffer &buffer) const;
+
     bool load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const security::Sha384Digest &buffer_hash);
+    boost::optional<asn1::ToBeSignedTlmCtl> parse_ectl(const ByteBuffer &buffer) const;
+    Clock::time_point calc_next_ectl_update(const asn1::ToBeSignedTlmCtl &ectl) const;
     void recover_failed_ectl_update(
         const boost::optional<asn1::ToBeSignedTlmCtl> &cached_ectl,
         const boost::optional<security::Sha384Digest> &buffer_hash);
+
+    boost::optional<asn1::ToBeSignedRcaCtl>
+    parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id) const;
+    boost::optional<SubCertificateV3>
+    find_subcert(const asn1::ToBeSignedRcaCtl &rca_ctl, const security::HashedId8 &cert_id) const;
 
     const EctlPaths &paths;
     const Runtime &runtime;

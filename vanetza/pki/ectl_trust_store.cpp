@@ -278,17 +278,58 @@ EctlTrustStore::parse_ectl(const ByteBuffer &ectl_buffer) const
     }
 
     // Extract ECTL
-    security::SecuredMessageV3 sec_packet_v3 = boost::get<security::SecuredMessageV3>(sec_packet);
+    const security::SecuredMessageV3 &sec_packet_v3 =
+        boost::get<security::SecuredMessageV3>(sec_packet);
     asn1::EtsiTs102941Data etsi_ts102_941_data;
     etsi_ts102_941_data.decode(sec_packet_v3.get_payload());
     if (etsi_ts102_941_data->content.present != EtsiTs102941DataContent_PR_certificateTrustListTlm) {
-        std::cerr << "ECTL does not contain a TLM certificate trust list" << std::endl;
+        std::cerr << "ECTL message does not contain a TLM certificate trust list" << std::endl;
         return boost::none;
     }
 
     asn1::ToBeSignedTlmCtl ectl;
     std::swap(*ectl, etsi_ts102_941_data->content.choice.certificateTrustListTlm);
     return ectl;
+}
+
+boost::optional<asn1::ToBeSignedRcaCtl>
+EctlTrustStore::parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id) const
+{
+    // Validate CA CTL signature
+    security::SecuredMessageVariant sec_packet = security::SecuredMessageV3(buffer);
+    security::VerifyRequest verify_request(sec_packet);
+    // CA cert should be in trust store, so we can use it for verification
+    security::DefaultCertificateValidator rca_cert_validator(backend, boost::none, *this);
+
+    auto verify_res =
+        security::verify_v3(verify_request, runtime, boost::none, rca_cert_validator,
+                            backend, boost::none, boost::none, boost::none);
+    if (verify_res.report != security::VerificationReport::Success) {
+        std::cerr << "Failed to verify RCA CTL" << std::endl;
+        return boost::none;
+    }
+    if (!verify_res.certificate_id) {
+        std::cerr << "No certificate ID in get_subcert" << std::endl;
+        return boost::none;
+    }
+    if (verify_res.certificate_id.get() != rca_id) {
+        std::cerr << "RCA CTL was not signed by given RCA ID" << std::endl;
+        return boost::none;
+    }
+
+    // Extract CA CTL
+    const security::SecuredMessageV3 &sec_packet_v3 =
+        boost::get<security::SecuredMessageV3>(sec_packet);
+    asn1::EtsiTs102941Data etsi_ts102_941_data;
+    etsi_ts102_941_data.decode(sec_packet_v3.get_payload());
+    if (etsi_ts102_941_data->content.present != EtsiTs102941DataContent_PR_certificateTrustListRca) {
+        std::cerr << "RCA CTL message does not contain a RCA CTL" << std::endl;
+        return boost::none;
+    }
+
+    asn1::ToBeSignedRcaCtl rca_ctl;
+    std::swap(*rca_ctl, etsi_ts102_941_data->content.choice.certificateTrustListRca);
+    return rca_ctl;
 }
 
 bool EctlTrustStore::load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const security::Sha384Digest &buffer_hash)
@@ -344,10 +385,10 @@ bool EctlTrustStore::load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const securit
     return true;
 }
 
-bool EctlTrustStore::is_revoked(const security::HashedId8 &issuer_id,
+bool EctlTrustStore::is_revoked(const security::HashedId8 &rca_id,
                                 const security::HashedId8 &cert_id) const
 {
-    const auto &rca_metadata = rca_metadata_map.find(issuer_id);
+    const auto &rca_metadata = rca_metadata_map.find(rca_id);
     if (rca_metadata == rca_metadata_map.end()) {
         return false;
     }
@@ -356,6 +397,114 @@ bool EctlTrustStore::is_revoked(const security::HashedId8 &issuer_id,
            rca_metadata->second.revoked_ids.end();
 }
 
+boost::optional<SubCertificateV3>
+EctlTrustStore::get_subcert(const security::HashedId8 &rca_id,
+                            const security::HashedId8 &cert_id)
+{
+    std::string rca_id_hex;
+    boost::algorithm::hex(rca_id, std::back_inserter(rca_id_hex));
+    std::string cert_id_hex;
+    boost::algorithm::hex(cert_id, std::back_inserter(cert_id_hex));
+    std::cout << "Requesting subcertificate " << cert_id_hex << " from RCA " << rca_id_hex << std::endl;
+
+    const auto &rca_metadata = rca_metadata_map.find(rca_id);
+    if (rca_metadata == rca_metadata_map.end()) {
+        std::cerr << "No metadata for RCA " << rca_id_hex << std::endl;
+        return boost::none;
+    }
+
+    const auto &dc_url = rca_metadata->second.dc_url;
+    if (dc_url.empty()) {
+        std::cerr << "DC URL for RCA " << rca_id_hex << " is empty" << std::endl;
+        return boost::none;
+    }
+
+    // Download CA CTL
+    std::string cert_url = dc_url + "getctl/" + rca_id_hex;
+    std::cout << "Downloading RCA CTL from " << cert_url << std::endl;
+    boost::optional<ByteBuffer> rca_ctl_buffer = curl.get_data(cert_url);
+    if (!rca_ctl_buffer) {
+        std::cerr << "Failed to get RCA CTL from " << cert_url << std::endl;
+        return boost::none;
+    }
+
+    // Parse CA CTL
+    boost::optional<asn1::ToBeSignedRcaCtl> rca_ctl = parse_rca_ctl(*rca_ctl_buffer, rca_id);
+    if (!rca_ctl) {
+        std::cerr << "Failed to parse RCA CTL" << std::endl;
+        return boost::none;
+    }
+
+    // TODO: cache CA CTLs
+
+    return find_subcert(*rca_ctl, cert_id);
+}
+
+boost::optional<SubCertificateV3>
+EctlTrustStore::find_subcert(const asn1::ToBeSignedRcaCtl &rca_ctl,
+                             const security::HashedId8 &cert_id) const
+{
+    // Check version and if isFullCtl is set
+    if (rca_ctl->version != Version_v1) {
+        std::cerr << "RCA CTL has unsupported version " << rca_ctl->version << std::endl;
+        return boost::none;
+    }
+    if (!rca_ctl->isFullCtl) {
+        std::cerr << "RCA CTL is not a full certificate trust list" << std::endl;
+        return boost::none;
+    }
+
+    boost::optional<SubCertificateV3> subcert;
+    const auto &rca_ctl_commands = rca_ctl->ctlCommands.list;
+    for (int i = 0; i < rca_ctl_commands.count; ++i) {
+        const auto &rca_ctl_command = *rca_ctl_commands.array[i];
+        if (rca_ctl_command.present != CtlCommand_PR_add) {
+            std::cerr << "RCA CTL command has unsupported type " << rca_ctl_command.present << std::endl;
+            continue;
+        }
+
+        const auto &rca_ctl_entry = rca_ctl_command.choice.add;
+        if (rca_ctl_entry.present == CtlEntry_PR_aa) {
+            const auto &aa_entry = rca_ctl_entry.choice.aa;
+            security::CertificateV3 aa_cert(aa_entry.aaCertificate);
+            // Check if certificate ID matches
+            if (aa_cert.calculate_hash() != cert_id) {
+                continue;
+            }
+            std::cout << "Found AA subcertificate" << std::endl;
+
+            const auto aa_access_point_url = convert_asn1_url(aa_entry.accessPoint);
+            return SubCertificateV3{std::move(aa_cert), aa_access_point_url, SubCaType::AA};
+        }
+
+        if (rca_ctl_entry.present == CtlEntry_PR_ea) {
+            const auto &ea_entry = rca_ctl_entry.choice.ea;
+            security::CertificateV3 ea_cert(ea_entry.eaCertificate);
+            // Check if certificate ID matches
+            if (ea_cert.calculate_hash() != cert_id) {
+                continue;
+            }
+            std::cout << "Found EA subcertificate" << std::endl;
+
+            boost::optional<std::string> ea_access_point_url;
+            if (ea_entry.itsAccessPoint) {
+                ea_access_point_url = convert_asn1_url(*ea_entry.itsAccessPoint);
+            }
+            return SubCertificateV3{std::move(ea_cert), ea_access_point_url, SubCaType::EA};
+        }
+
+        if (rca_ctl_entry.present == CtlEntry_PR_dc) {
+            // Skip RCA DC entry
+            continue;
+        }
+
+        std::cerr << "RCA CTL entry has unsupported type " << rca_ctl_entry.present << std::endl;
+        continue;
+    }
+
+    std::cerr << "No matching subcertificate found in RCA CTL" << std::endl;
+    return boost::none;
+}
 
 } // namespace pki
 } // namespace vanetza
