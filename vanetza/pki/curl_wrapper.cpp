@@ -1,4 +1,5 @@
 #include <vanetza/pki/curl_wrapper.hpp>
+#include <iostream>
 
 namespace vanetza
 {
@@ -24,11 +25,14 @@ CurlWrapper::CurlWrapper(const Runtime& runtime) : runtime(runtime)
     // Set timeout
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 2000L);
+    // Fail on HTTP error codes
+    curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
 }
 
 CurlWrapper::~CurlWrapper()
 {
     curl_easy_cleanup(curl);
+    curl_slist_free_all(its_request_headerlist);
 }
 
 boost::optional<ByteBuffer> CurlWrapper::get_data(const std::string& url)
@@ -40,11 +44,50 @@ boost::optional<ByteBuffer> CurlWrapper::get_data(const std::string& url)
 
     ByteBuffer bb;
     curl_easy_setopt(curl, CURLOPT_URL, url.data());
+    curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &bb);
     CURLcode res = curl_easy_perform(curl);
     if (res == CURLE_OK) {
         return bb;
     }
+
+    std::cout << "CurlWrapper::get_data() failed: " << curl_easy_strerror(res) << std::endl;
+    last_failure = runtime.now();
+    return boost::none;
+}
+
+curl_slist *create_its_request_headerlist()
+{
+    curl_slist *headerlist = nullptr;
+    headerlist = curl_slist_append(headerlist, "Content-Type: application/x-its-request");
+    return headerlist;
+}
+
+boost::optional<ByteBuffer>
+CurlWrapper::post_its_request(const std::string &url, const ByteBuffer &data)
+{
+    // Do not try to fetch data if last attempt failed less than 5 seconds ago
+    if (runtime.now() - last_failure < std::chrono::seconds(5)) {
+        return boost::none;
+    }
+
+    struct curl_slist *headerlist = nullptr;
+    headerlist = curl_slist_append(headerlist, "Content-Type: application/x-its-request");
+
+    ByteBuffer bb;
+    curl_easy_setopt(curl, CURLOPT_URL, url.data());
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &bb);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, data.size());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.data());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerlist);
+    CURLcode res = curl_easy_perform(curl);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, nullptr);
+    if (res == CURLE_OK) {
+        return bb;
+    }
+
+    std::cout << "CurlWrapper::post_its_request() failed: " << curl_easy_strerror(res) << std::endl;
     last_failure = runtime.now();
     return boost::none;
 }

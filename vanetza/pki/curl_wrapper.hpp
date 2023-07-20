@@ -14,6 +14,8 @@ namespace vanetza
 namespace pki
 {
 
+curl_slist *create_its_request_headerlist();
+
 class CurlWrapper
 {
 public:
@@ -22,10 +24,14 @@ public:
 
     boost::optional<ByteBuffer> get_data(const std::string &url);
 
-private:
+    boost::optional<ByteBuffer> post_its_request(const std::string &url,
+                                          const ByteBuffer &data);
+
+  private:
     CURL *curl = curl_easy_init();
     Clock::time_point last_failure;
     const Runtime &runtime;
+    curl_slist *its_request_headerlist = create_its_request_headerlist();
 };
 
 } // namespace pki
