@@ -565,6 +565,7 @@ bool check_consistency(const Certificate& certificate, const Certificate& signer
 
 bool check_consistency(const CertificateV3& certificate, const CertificateV3& signer)
 {
+    // TODO: uncomment this when the CMC certs are fixed
     // if (!check_time_consistency(certificate, signer)) {
     //     return false;
     // }
