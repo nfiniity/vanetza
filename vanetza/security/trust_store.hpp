@@ -41,7 +41,7 @@ public:
         return false;
     }
 
-private:
+protected:
     std::multimap<HashedId8, CertificateVariant> m_certificates;
 };
 

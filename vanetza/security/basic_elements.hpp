@@ -35,6 +35,13 @@ struct Time64WithStandardDeviation
 Time32 convert_time32(const Clock::time_point& tp);
 
 /**
+ * Convert time stamp to time point
+ * \param t time stamp with second accuracy
+ * \return time point
+ */
+Clock::time_point convert_time_point(const Time32& t);
+
+/**
  * Convert time point to time stamp
  * \param tp time point
  * \return time stamp with microsecond accuracy

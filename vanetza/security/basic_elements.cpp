@@ -25,6 +25,13 @@ Time32 convert_time32(const Clock::time_point& tp)
     return duration_cast<seconds>(tp.time_since_epoch()).count();
 }
 
+Clock::time_point convert_time_point(const Time32& t)
+{
+    using std::chrono::duration_cast;
+    using seconds = std::chrono::duration<Time32>;
+    return Clock::time_point { duration_cast<Clock::duration>(seconds(t)) };
+}
+
 Time64 convert_time64(const Clock::time_point& tp)
 {
     using std::chrono::duration_cast;
