@@ -45,11 +45,11 @@ void EctlPaths::create_directories() const {
     boost::filesystem::create_directories(at);
 }
 
-EctlTrustStore::EctlTrustStore(const EctlPaths &paths,
-                               const Runtime &runtime,
+EctlTrustStore::EctlTrustStore(const EctlPaths &paths, const Runtime &runtime,
+                               CurlWrapper &curl,
                                security::Backend &backend,
                                const std::string &cpoc_url)
-    : paths(paths), runtime(runtime), backend(backend), cpoc_url(cpoc_url), curl(runtime)
+    : paths(paths), runtime(runtime), curl(curl), backend(backend), cpoc_url(cpoc_url)
 {
     // Load TLM certificate and ECTL
     refresh_ectl();

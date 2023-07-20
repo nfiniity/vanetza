@@ -7,7 +7,6 @@
 #include <vanetza/security/security_entity.hpp>
 #include <vanetza/common/runtime.hpp>
 #include <vanetza/asn1/ctl.hpp>
-#include <curl/curl.h>
 #include <set>
 #include <map>
 
@@ -74,10 +73,13 @@ public:
      * A trust store with root certificates from the ECTL
      * \param paths ECTL paths
      * \param runtime Runtime instance
+     * \param curl Curl Wrapper
+     * \param backend Security backend
      * \param cpoc_url URL of CPOC server (with trailing slash)
      */
     EctlTrustStore(const EctlPaths &paths,
                    const Runtime &runtime,
+                   CurlWrapper& curl,
                    security::Backend &backend,
                    const std::string &cpoc_url = L0_CPOC_URL);
     ~EctlTrustStore() override = default;
@@ -125,7 +127,7 @@ public:
     security::Backend &backend;
     std::string cpoc_url;
 
-    CurlWrapper curl;
+    CurlWrapper& curl;
     boost::optional<security::CertificateV3> tlm_cert;
     // Hash of ECTL buffer the store was loaded from
     boost::optional<security::Sha384Digest> ectl_buffer_hash;
