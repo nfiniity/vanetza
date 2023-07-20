@@ -16,6 +16,18 @@ namespace vanetza
 namespace pki
 {
 
+std::string convert_asn1_url(const Url_t &url)
+{
+    std::string url_str(url.buf, url.buf + url.size);
+    // Trim trailing whitespace
+    boost::algorithm::trim(url_str);
+    // Make sure there is a trailing slash
+    if (!url_str.empty() && url_str.back() != '/') {
+        url_str += '/';
+    }
+    return url_str;
+}
+
 EctlPaths::EctlPaths(const std::string &base_path)
     : ctl(base_path + "ctl/"), tlm_cert(ctl + "tlm_cert.oer"),
       ectl(ctl + "ectl.oer"), crl(base_path + "crl/"), reg(base_path + "reg/"),
@@ -315,9 +327,7 @@ bool EctlTrustStore::load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const securit
             const auto &dc_url = dc.url;
             for (int j = 0; j < dc.cert.list.count; ++j) {
                 const auto cert_id = asn1::HashedId8_asn_to_HashedId8(*dc.cert.list.array[j]);
-                std::string dc_url_str(dc_url.buf, dc_url.buf + dc_url.size);
-                boost::algorithm::trim(dc_url_str);
-                rca_metadata_map[cert_id].dc_url = dc_url_str;
+                rca_metadata_map[cert_id].dc_url = convert_asn1_url(dc_url);
             }
         } else if (ectl_entry.present == CtlEntry_PR_tlm) {
             // Ignore TLM certificate
