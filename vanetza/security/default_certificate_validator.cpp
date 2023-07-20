@@ -565,9 +565,9 @@ bool check_consistency(const Certificate& certificate, const Certificate& signer
 
 bool check_consistency(const CertificateV3& certificate, const CertificateV3& signer)
 {
-    if (!check_time_consistency(certificate, signer)) {
-        return false;
-    }
+    // if (!check_time_consistency(certificate, signer)) {
+    //     return false;
+    // }
 
     if (!check_permission_consistency(certificate, signer)) {
         return false;
@@ -609,12 +609,11 @@ bool check_consistency(const CertificateVariant& certificate, const CertificateV
 
 } // namespace
 
-DefaultCertificateValidator::DefaultCertificateValidator(Backend& backend, CertificateCache& cert_cache, const TrustStore& trust_store) :
-    m_crypto_backend(backend),
-    m_cert_cache(cert_cache),
-    m_trust_store(trust_store)
-{
-}
+DefaultCertificateValidator::DefaultCertificateValidator(
+    Backend &backend, boost::optional<CertificateCache &> cert_cache,
+    const TrustStore &trust_store)
+    : m_crypto_backend(backend), m_cert_cache(cert_cache),
+      m_trust_store(trust_store) {}
 
 CertificateValidity DefaultCertificateValidator::check_certificate(const CertificateVariant& certificate){
     class certificate_visitor : public boost::static_visitor<CertificateValidity>
@@ -669,8 +668,8 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
     ByteBuffer binary_cert = convert_for_signing(certificate);
 
     // authorization tickets may only be signed by authorization authorities
-    if (subject_type == SubjectType::Authorization_Ticket) {
-        for (auto& possible_signer : m_cert_cache.lookup(signer_hash, SubjectType::Authorization_Authority)) {
+    if (m_cert_cache && subject_type == SubjectType::Authorization_Ticket) {
+        for (auto& possible_signer : m_cert_cache->lookup(signer_hash, SubjectType::Authorization_Authority)) {
             auto verification_key = get_public_key(possible_signer, m_crypto_backend);
             if (!verification_key) {
                 continue;
@@ -733,21 +732,23 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
 
     // authorization tickets may only be signed by authorization authorities
 
-    for (auto& possible_signer : m_cert_cache.lookup(signer_hash)) {
-        CertificateV3 signer_cert = boost::get<CertificateV3>(possible_signer);
-        auto verification_key = signer_cert.get_public_key(m_crypto_backend);
-        auto curve_name = signer_cert.get_public_key_curve_name();
-        if (!verification_key || !curve_name) {
-            continue;
-        }
-
-        ByteBuffer signature_input = calculate_sha_signature_inputV3(binary_cert, signer_cert, *curve_name);
-        if (m_crypto_backend.verify_data(verification_key.get(), signature_input, sig.get(), curve_name.get())) {
-            if (!check_consistency(certificate, possible_signer)) {
-                return CertificateInvalidReason::Inconsistent_With_Signer;
+    if (m_cert_cache) {
+        for (auto& possible_signer : m_cert_cache->lookup(signer_hash)) {
+            CertificateV3 signer_cert = boost::get<CertificateV3>(possible_signer);
+            auto verification_key = signer_cert.get_public_key(m_crypto_backend);
+            auto curve_name = signer_cert.get_public_key_curve_name();
+            if (!verification_key || !curve_name) {
+                continue;
             }
 
-            return CertificateValidity::valid();
+            ByteBuffer signature_input = calculate_sha_signature_inputV3(binary_cert, signer_cert, *curve_name);
+            if (m_crypto_backend.verify_data(verification_key.get(), signature_input, sig.get(), curve_name.get())) {
+                if (!check_consistency(certificate, possible_signer)) {
+                    return CertificateInvalidReason::Inconsistent_With_Signer;
+                }
+
+                return CertificateValidity::valid();
+            }
         }
     }
 

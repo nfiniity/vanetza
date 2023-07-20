@@ -359,14 +359,17 @@ bool assign_permissions(const vanetza::security::CertificateVariant& certificate
 
 } // namespace
 
-VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificateProvider& cert_provider, CertificateValidator& certs, Backend& backend, CertificateCache& cert_cache, SignHeaderPolicy& sign_policy, PositionProvider& positioning){
+VerifyConfirm verify_v3(const VerifyRequest &request,
+                        const Runtime &rt,
+                        const boost::optional<CertificateProvider&> cert_provider,
+                        const boost::optional<CertificateValidator&> certs,
+                        Backend &backend,
+                        boost::optional<CertificateCache&> cert_cache,
+                        boost::optional<SignHeaderPolicy&> sign_policy,
+                        const boost::optional<PositionProvider&> positioning)
+{
     VerifyConfirm confirm;
     const SecuredMessageV3 &secured_message = boost::get<SecuredMessageV3>(request.secured_message);
-
-    if (cert_provider.version() != 3){
-        confirm.report = VerificationReport::Incompatible_Protocol;
-        return confirm;
-    }
 
     if (!secured_message.is_signed_message()) {
         confirm.report = VerificationReport::Unsigned_Message;
@@ -379,16 +382,22 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     }
 
 
-    std::list<HashedId3> requested_certs = secured_message.get_inline_p2pcd_Request();
-    if (requested_certs.size() > 0) {
-        for (auto& requested_cert : requested_certs) {
-            if (truncate(boost::get<CertificateV3>(cert_provider.own_certificate()).calculate_hash()) == requested_cert) {
-                sign_policy.request_certificate();
-            }
+    if (cert_provider && sign_policy) {
+        if (cert_provider->version() != 3){
+            confirm.report = VerificationReport::Incompatible_Protocol;
+            return confirm;
+        }
+        std::list<HashedId3> requested_certs = secured_message.get_inline_p2pcd_Request();
+        if (requested_certs.size() > 0) {
+            for (auto& requested_cert : requested_certs) {
+                if (truncate(boost::get<CertificateV3>(cert_provider->own_certificate()).calculate_hash()) == requested_cert) {
+                    sign_policy->request_certificate();
+                }
 
-            for (auto& cert : cert_provider.own_chain()) {
-                if (truncate(boost::get<CertificateV3>(cert).calculate_hash()) == requested_cert) {
-                    sign_policy.request_certificate_chain();
+                for (auto& cert : cert_provider->own_chain()) {
+                    if (truncate(boost::get<CertificateV3>(cert).calculate_hash()) == requested_cert) {
+                        sign_policy->request_certificate_chain();
+                    }
                 }
             }
         }
@@ -406,32 +415,34 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     HashedId8 signer_hash;
     signer_hash.fill(0x00);
 
-    std::list<CertificateVariant> temp_variant_cache;
-
     if (signer_info) {
         std::list<CertificateVariant> chain;
-        switch (get_type(*signer_info)) {
-            case SignerInfoType::Certificate:
+        auto signer_info_type = get_type(*signer_info);
+        switch (signer_info_type) {
+            case SignerInfoType::Certificate: {
                 possible_certificates.push_back(boost::get<CertificateVariant>(*signer_info));
                 signer_hash = calculate_hash(boost::get<CertificateVariant>(*signer_info));
 
-                if (confirm.its_aid == aid::CA && cert_cache.lookup(signer_hash).empty()) {
-                    // Previously unknown certificate, send own certificate in next CAM
-                    // See TS 103 097 v1.2.1, section 7.1, 1st bullet, 3rd dash
-                    sign_policy.request_certificate();
+                if (sign_policy && cert_cache && confirm.its_aid == aid::CA &&
+                    cert_cache->lookup(signer_hash).empty()) {
+                    // Previously unknown certificate, send own certificate in next
+                    // CAM See TS 103 097 v1.2.1, section 7.1, 1st bullet, 3rd dash
+                    sign_policy->request_certificate();
                 }
                 break;
-
-            case SignerInfoType::Certificate_Digest_With_SHA256:
+            }
+            case SignerInfoType::Certificate_Digest_With_SHA256: {
                 signer_hash = boost::get<HashedId8>(*signer_info);
-                temp_variant_cache = cert_cache.lookup(signer_hash);
-                for (const auto& cert: temp_variant_cache){
-                    possible_certificates.push_back(boost::get<CertificateV3>(cert));
+                if (cert_cache) {
+                    std::list<CertificateVariant> temp_variant_cache = cert_cache->lookup(signer_hash);
+                    for (const auto& cert: temp_variant_cache){
+                        possible_certificates.push_back(boost::get<CertificateV3>(cert));
+                    }
+                    possible_certificates_from_cache = true;
                 }
-                possible_certificates_from_cache = true;
                 break;
-
-            case SignerInfoType::Certificate_Chain:
+            }
+            case SignerInfoType::Certificate_Chain: {
                 chain = boost::get<std::list<CertificateVariant>>(*signer_info);
                 if (chain.empty()) {
                     confirm.report = VerificationReport::Signer_Certificate_Not_Found;
@@ -443,18 +454,20 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
                     confirm.report = VerificationReport::Invalid_Certificate;
                     return confirm;
 
-                } else if (chain.size() == 1 && confirm.its_aid == aid::CA && cert_cache.lookup(signer_hash).empty()) {
+                } else if (sign_policy && chain.size() == 1 &&
+                           confirm.its_aid == aid::CA && cert_cache &&
+                           cert_cache->lookup(signer_hash).empty()) {
                     // Previously unknown certificate, send own certificate in next CAM
                     // See TS 103 097 v1.2.1, section 7.1, 1st bullet, 3rd dash
-                    sign_policy.request_certificate();
+                    sign_policy->request_certificate();
 
-                } else if (chain.size() > 1) {
+                } else if (certs && cert_cache && chain.size() > 1) {
                     // pre-check chain certificates, otherwise they're not available for the ticket check
                     // The second certificate will always have to be the AA
                     std::list<CertificateVariant>::iterator it = chain.begin();
                     std::advance(it, 1);
                     CertificateVariant& cert = *it;
-                    CertificateValidity validity = certs.check_certificate(cert);
+                    CertificateValidity validity = certs->check_certificate(cert);
 
                     // we can abort early if there are invalid AA certificates in the chain
                     if (!validity) {
@@ -466,27 +479,32 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
                     // We won't cache outdated or premature certificates in the cache and abort early.
                     // This check isn't required as it would just fail below or in the consistency checks,
                     // but it's an optimization and saves us from polluting the cache with such certificates.
-                    if (!check_certificate_time(cert, rt.now()) || !check_certificate_region(cert, positioning.position_fix())) {
+                    if (!check_certificate_time(cert, rt.now()) ||
+                        (positioning && !check_certificate_region(cert, positioning->position_fix()))
+                    ) {
                         confirm.report = VerificationReport::Invalid_Certificate;
                         return confirm;
                     }
 
-                    cert_cache.insert(cert);
+                    cert_cache->insert(cert);
                 }
                 // first certificate must be the authorization ticket
                 signer_hash =  calculate_hash(chain.front());
                 possible_certificates.push_back(chain.front());
                 break;
-
-            default:
+            }
+            default: {
                 confirm.report = VerificationReport::Unsupported_Signer_Identifier_Type;
                 return confirm;
+            }
         }
     }
     if (possible_certificates.size() == 0) {
         confirm.report = VerificationReport::Signer_Certificate_Not_Found;
         confirm.certificate_id = signer_hash;
-        sign_policy.request_unrecognized_certificate(signer_hash);
+        if (sign_policy) {
+            sign_policy->request_unrecognized_certificate(signer_hash);
+        }
         return confirm;
     }
     if (!check_generation_time(secured_message, rt.now())) {
@@ -542,7 +560,9 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         }
 
         confirm.certificate_id = signer_hash;
-        sign_policy.request_unrecognized_certificate(signer_hash);
+        if (sign_policy) {
+            sign_policy->request_unrecognized_certificate(signer_hash);
+        }
         return confirm;
     }
 
@@ -555,8 +575,8 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     }
 
     CertificateValidity cert_validity = CertificateValidity::valid();
-    if (!possible_certificates_from_cache) { // certificates from cache are already verified as trusted
-        cert_validity = certs.check_certificate(*signer);
+    if (certs && !possible_certificates_from_cache) { // certificates from cache are already verified as trusted
+        cert_validity = certs->check_certificate(*signer);
     }
 
     confirm.certificate_validity = cert_validity;
@@ -566,8 +586,10 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         confirm.report = VerificationReport::Invalid_Certificate;
 
         if (cert_validity.reason() == CertificateInvalidReason::Unknown_Signer && secured_message.is_signer_digest()) {
-                confirm.certificate_id = signer_hash;
-                sign_policy.request_unrecognized_certificate(signer_hash);
+            confirm.certificate_id = signer_hash;
+            if (sign_policy) {
+                sign_policy->request_unrecognized_certificate(signer_hash);
+            }
         }
 
         return confirm;
@@ -579,7 +601,7 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
         return confirm;
     }
 
-    if (!check_certificate_region(*signer, positioning.position_fix())) {
+    if (positioning && !check_certificate_region(*signer, positioning->position_fix())) {
         confirm.report = VerificationReport::Invalid_Certificate;
         confirm.certificate_validity = CertificateInvalidReason::Off_Region;
         return confirm;
@@ -595,7 +617,9 @@ VerifyConfirm verify_v3(VerifyRequest& request, const Runtime& rt, CertificatePr
     }
 
     // cache only certificates that are useful, one that mismatches its restrictions isn't
-    cert_cache.insert(*signer);
+    if (cert_cache) {
+        cert_cache->insert(*signer);
+    }
 
     confirm.report = VerificationReport::Success;
     return confirm;

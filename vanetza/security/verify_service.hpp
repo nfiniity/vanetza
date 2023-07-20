@@ -95,6 +95,18 @@ VerifyService straight_verify_service(const Runtime&, CertificateProvider&, Cert
  */
 VerifyService dummy_verify_service(VerificationReport report, CertificateValidity validity);
 
+/**
+ * Same as straight_verify_service, but with options to skip some checks
+ */
+VerifyConfirm verify_v3(const VerifyRequest &request,
+                        const Runtime &rt,
+                        const boost::optional<CertificateProvider&> cert_provider,
+                        const boost::optional<CertificateValidator&> certs,
+                        Backend &backend,
+                        boost::optional<CertificateCache&> cert_cache,
+                        boost::optional<SignHeaderPolicy&> sign_policy,
+                        const boost::optional<PositionProvider&> positioning);
+
 } // namespace security
 } // namespace vanetza
 
