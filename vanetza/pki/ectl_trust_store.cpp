@@ -16,7 +16,7 @@ namespace pki
 {
 
 EctlPaths::EctlPaths(const std::string &base_path)
-    : ctl(base_path + "ctl/"), tlm_cert(ctl + "tlm_cert.der"), ectl(ctl + "ectl.der"),
+    : ctl(base_path + "ctl/"), tlm_cert(ctl + "tlm_cert.oer"), ectl(ctl + "ectl.oer"),
       crl(base_path + "crl/"), reg(base_path + "reg/"), ec(base_path + "ec/"),
       at(base_path + "at/") {}
 
