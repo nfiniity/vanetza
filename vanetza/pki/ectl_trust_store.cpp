@@ -16,13 +16,13 @@ namespace vanetza
 namespace pki
 {
 
-std::string convert_asn1_url(const Url_t &url)
+std::string convert_asn1_url(const Url_t &url, bool add_trailing_slash)
 {
     std::string url_str(url.buf, url.buf + url.size);
     // Trim trailing whitespace
     boost::algorithm::trim(url_str);
     // Make sure there is a trailing slash
-    if (!url_str.empty() && url_str.back() != '/') {
+    if (add_trailing_slash &&!url_str.empty() && url_str.back() != '/') {
         url_str += '/';
     }
     return url_str;
@@ -293,7 +293,7 @@ EctlTrustStore::parse_ectl(const ByteBuffer &ectl_buffer) const
 }
 
 boost::optional<asn1::ToBeSignedRcaCtl>
-EctlTrustStore::parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id) const
+EctlTrustStore::parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id)
 {
     // Validate CA CTL signature
     security::SecuredMessageVariant sec_packet = security::SecuredMessageV3(buffer);
@@ -368,7 +368,7 @@ bool EctlTrustStore::load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const securit
             const auto &dc_url = dc.url;
             for (int j = 0; j < dc.cert.list.count; ++j) {
                 const auto cert_id = asn1::HashedId8_asn_to_HashedId8(*dc.cert.list.array[j]);
-                rca_metadata_map[cert_id].dc_url = convert_asn1_url(dc_url);
+                rca_metadata_map[cert_id].dc_url = convert_asn1_url(dc_url, true);
             }
         } else if (ectl_entry.present == CtlEntry_PR_tlm) {
             // Ignore TLM certificate
@@ -388,6 +388,7 @@ bool EctlTrustStore::load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const securit
 bool EctlTrustStore::is_revoked(const security::HashedId8 &rca_id,
                                 const security::HashedId8 &cert_id) const
 {
+    // TODO: download and parse CRLs
     const auto &rca_metadata = rca_metadata_map.find(rca_id);
     if (rca_metadata == rca_metadata_map.end()) {
         return false;
@@ -473,7 +474,7 @@ EctlTrustStore::find_subcert(const asn1::ToBeSignedRcaCtl &rca_ctl,
             }
             std::cout << "Found AA subcertificate" << std::endl;
 
-            const auto aa_access_point_url = convert_asn1_url(aa_entry.accessPoint);
+            const auto aa_access_point_url = convert_asn1_url(aa_entry.accessPoint, false);
             return SubCertificateV3{std::move(aa_cert), aa_access_point_url, SubCaType::AA};
         }
 
@@ -488,7 +489,7 @@ EctlTrustStore::find_subcert(const asn1::ToBeSignedRcaCtl &rca_ctl,
 
             boost::optional<std::string> ea_access_point_url;
             if (ea_entry.itsAccessPoint) {
-                ea_access_point_url = convert_asn1_url(*ea_entry.itsAccessPoint);
+                ea_access_point_url = convert_asn1_url(*ea_entry.itsAccessPoint, false);
             }
             return SubCertificateV3{std::move(ea_cert), ea_access_point_url, SubCaType::EA};
         }
