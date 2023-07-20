@@ -544,6 +544,7 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
         ByteBuffer signature_input = calculate_sha_signature_inputV3(payload, certificateV3, *curve_name);
         if (backend.verify_data(*public_key, signature_input, *signature, *curve_name)) {
             signer = cert;
+            confirm.certificate_id = signer_hash;
             break;
         }
     }
