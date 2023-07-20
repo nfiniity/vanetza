@@ -7,6 +7,7 @@
 #include <vanetza/asn1/utils.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/hex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <fstream>
 
@@ -314,7 +315,9 @@ bool EctlTrustStore::load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const securit
             const auto &dc_url = dc.url;
             for (int j = 0; j < dc.cert.list.count; ++j) {
                 const auto cert_id = asn1::HashedId8_asn_to_HashedId8(*dc.cert.list.array[j]);
-                rca_metadata_map[cert_id].dc_url = std::string(dc_url.buf, dc_url.buf + dc_url.size);
+                std::string dc_url_str(dc_url.buf, dc_url.buf + dc_url.size);
+                boost::algorithm::trim(dc_url_str);
+                rca_metadata_map[cert_id].dc_url = dc_url_str;
             }
         } else if (ectl_entry.present == CtlEntry_PR_tlm) {
             // Ignore TLM certificate
