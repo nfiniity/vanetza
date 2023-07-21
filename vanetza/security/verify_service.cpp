@@ -58,27 +58,36 @@ bool check_generation_time(const SecuredMessageV3& message, Clock::time_point no
     bool valid = false;
     std::shared_ptr<Time64> generation_time = message.get_generation_time();
     if (generation_time) {
-        // Values are picked from C2C-CC Basic System Profile v1.1.0, see RS_BSP_168
-        static const auto generation_time_future = milliseconds(40);
+        Clock::time_point generation_point = convert_time_point(*generation_time);
+
+        static const Clock::duration generation_time_future_default = milliseconds(200);
+        // Extra time to account for request/response round trip
+        static const Clock::duration generation_time_future_certs = seconds(1);
+
         static const Clock::duration generation_time_past_default = minutes(10);
         static const Clock::duration generation_time_past_ca = seconds(2);
+        // This is not specified, so we assume this is equal
+        // to the maximum validity of a CA certificate (5 years)
+        static const Clock::duration generation_time_past_ctl_crl = hours(43800);
+
+        auto generation_time_future = generation_time_future_default;
         auto generation_time_past = generation_time_past_default;
 
         const Psid_t psid = message.get_psid();
         if (aid::CA == psid) {
             generation_time_past = generation_time_past_ca;
-        } else if (aid::CTL == psid) {
-            // CTLs can be valid for about 4 months
-            generation_time_past = hours(3000);
-        } else if (aid::CRL == psid) {
-            // This is not specified, so we assume this is equal
-            // to the maximum validity of a CA certificate (5 years)
-            generation_time_past = hours(43800);
+        } else if (aid::CTL == psid || aid::CRL == psid) {
+            generation_time_future = generation_time_future_certs;
+            generation_time_past = generation_time_past_ctl_crl;
+        } else if (aid::SCR == psid) {
+            generation_time_future = generation_time_future_certs;
         }
 
-        if (*generation_time > convert_time64(now + generation_time_future)) {
+        if (generation_point > (now + generation_time_future)) {
+            // Too far in the future
             valid = false;
-        } else if (*generation_time < convert_time64(now - generation_time_past)) {
+        } else if (generation_point < (now - generation_time_past)) {
+            // Too far in the past
             valid = false;
         } else {
             valid = true;

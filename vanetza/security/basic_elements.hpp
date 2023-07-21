@@ -48,6 +48,13 @@ Clock::time_point convert_time_point(const Time32& t);
  */
 Time64 convert_time64(const Clock::time_point& tp);
 
+/**
+ * Convert time stamp to time point
+ * \param t time stamp with microsecond accuracy
+ * \return time point
+ */
+Clock::time_point convert_time_point(const Time64& t);
+
 } // namespace security
 } // namespace vanetza
 

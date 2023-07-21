@@ -32,6 +32,13 @@ Clock::time_point convert_time_point(const Time32& t)
     return Clock::time_point { duration_cast<Clock::duration>(seconds(t)) };
 }
 
+Clock::time_point convert_time_point(const Time64& t)
+{
+    using std::chrono::duration_cast;
+    using microseconds = std::chrono::duration<Time64, std::micro>;
+    return Clock::time_point { duration_cast<Clock::duration>(microseconds(t)) };
+}
+
 Time64 convert_time64(const Clock::time_point& tp)
 {
     using std::chrono::duration_cast;
