@@ -3,6 +3,7 @@ add_vanetza_component(pki
     authorization_ticket_provider.cpp
     curl_wrapper.cpp
     ectl_trust_store.cpp
+    ectl_security_entity.cpp
     enrolment_certificates.cpp
     enrolment_certificate_provider.cpp
 )

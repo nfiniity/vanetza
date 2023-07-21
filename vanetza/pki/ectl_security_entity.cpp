@@ -1,6 +1,11 @@
-#include "pki_security.hpp"
+#include <vanetza/pki/ectl_security_entity.hpp>
+#include <boost/algorithm/hex.hpp>
 
-using namespace vanetza;
+namespace vanetza
+{
+
+namespace pki
+{
 
 security::DelegatingSecurityEntity
 build_delegating_entity(const Runtime &runtime,
@@ -62,7 +67,7 @@ build_at_provider(pki::EctlTrustStore &trust_store,
         backend, runtime, curl, paths, psid_ssp_list);
 }
 
-PkiSecurityContext::PkiSecurityContext(
+EctlSecurityEntity::EctlSecurityEntity(
     const Runtime &runtime,
     PositionProvider &positioning,
     const std::string &trust_store_path,
@@ -85,12 +90,48 @@ PkiSecurityContext::PkiSecurityContext(
                           cert_cache, sign_header_policy, positioning)) {}
 
 security::EncapConfirm
-PkiSecurityContext::encapsulate_packet(security::EncapRequest &&request) {
+EctlSecurityEntity::encapsulate_packet(security::EncapRequest &&request) {
     return delegating_entity.encapsulate_packet(std::move(request));
 }
 
 security::DecapConfirm
-PkiSecurityContext::decapsulate_packet(security::DecapRequest&& request)
+EctlSecurityEntity::decapsulate_packet(security::DecapRequest&& request)
 {
     return delegating_entity.decapsulate_packet(std::move(request));
 }
+
+vanetza::asn1::SequenceOfPsidSsp get_psid_ssp_list()
+{
+    // PSID/SSP for CA
+    asn1::PsidSsp ca_psid_ssp;
+    ca_psid_ssp->psid = aid::CA;
+    ca_psid_ssp->ssp = asn1::allocate<ServiceSpecificPermissions_t>();
+    ca_psid_ssp->ssp->present = ServiceSpecificPermissions_PR_bitmapSsp;
+    OCTET_STRING_fromBuf(&ca_psid_ssp->ssp->choice.bitmapSsp, "\x01\xff\xfc", 3);
+
+    // PSID/SSP for DEN
+    asn1::PsidSsp den_psid_ssp;
+    den_psid_ssp->psid = aid::DEN;
+    den_psid_ssp->ssp = asn1::allocate<ServiceSpecificPermissions_t>();
+    den_psid_ssp->ssp->present = ServiceSpecificPermissions_PR_bitmapSsp;
+    OCTET_STRING_fromBuf(&den_psid_ssp->ssp->choice.bitmapSsp, "\x01\xff\xff\xff", 4);
+
+    // PSID/SSP for GN_MGMT
+    asn1::PsidSsp gn_mgmt_psid_ssp;
+    gn_mgmt_psid_ssp->psid = aid::GN_MGMT;
+
+    // Put all PSID/SSP pairs into a list
+    asn1::SequenceOfPsidSsp psid_ssp_list;
+    ASN_SEQUENCE_ADD(&psid_ssp_list->list,
+                     asn1::copy(asn_DEF_PsidSsp, &(*ca_psid_ssp)));
+    ASN_SEQUENCE_ADD(&psid_ssp_list->list,
+                     asn1::copy(asn_DEF_PsidSsp, &(*den_psid_ssp)));
+    ASN_SEQUENCE_ADD(&psid_ssp_list->list,
+                     asn1::copy(asn_DEF_PsidSsp, &(*gn_mgmt_psid_ssp)));
+
+    return psid_ssp_list;
+}
+
+} // namespace pki
+
+} // namespace vanetza

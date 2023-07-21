@@ -19,7 +19,6 @@ add_executable(socktap
     hello_application.cpp
     link_layer.cpp
     main.cpp
-    pki_security.cpp
     positioning.cpp
     raw_socket_link.cpp
     router_context.cpp
