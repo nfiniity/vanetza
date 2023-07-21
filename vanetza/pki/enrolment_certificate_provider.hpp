@@ -19,6 +19,7 @@ public:
     /**
      * Create enrolment certificate provider
      * \param ea_certificate certificate of EA
+     * \param backend Backend
      * \param runtime used for signatures
      * \param curl used for HTTP requests
      * \param ectl_paths paths to EC files
@@ -26,6 +27,7 @@ public:
      * \param canonical_id canonical id used for registration (place key according to EctlPaths)
      */
     explicit EnrolmentCertificateProvider(const SubCertificateV3& ea_certificate,
+                                          security::BackendOpenSsl& backend,
                                           const Runtime &runtime,
                                           CurlWrapper& curl,
                                           const EctlPaths& ectl_paths,
@@ -65,6 +67,7 @@ private:
     run_enrolment_request(const security::EncryptConfirm &request);
 
     SubCertificateV3 ea_certificate;
+    security::BackendOpenSsl& backend;
     const Runtime &runtime;
     CurlWrapper& curl;
     const EctlPaths& ectl_paths;

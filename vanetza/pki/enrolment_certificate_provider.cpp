@@ -14,12 +14,13 @@ namespace pki
 
 EnrolmentCertificateProvider::EnrolmentCertificateProvider(
     const SubCertificateV3 &ea_certificate,
+    security::BackendOpenSsl &backend,
     const Runtime &runtime,
     CurlWrapper &curl,
     const EctlPaths &ectl_paths,
     const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list,
     const boost::optional<std::string> &canonical_id)
-    : ea_certificate(ea_certificate), runtime(runtime), curl(curl),
+    : ea_certificate(ea_certificate), backend(backend), runtime(runtime), curl(curl),
       ectl_paths(ectl_paths), psid_ssp_list(psid_ssp_list), canonical_id(canonical_id)
 {
     // EA certificate checks
@@ -109,7 +110,7 @@ bool EnrolmentCertificateProvider::initial_enrol()
     // Build EnrolmentRequest message
     security::EncryptConfirm enrolment_request = build_enrolment_request(
         canonical_id_bb, new_ec_key, canonical_cert_provider,
-        ea_certificate.certificate, runtime, psid_ssp_list, curve_name);
+        ea_certificate.certificate, backend, runtime, psid_ssp_list, curve_name);
 
     auto new_enrolment_certificate = run_enrolment_request(enrolment_request);
     if (!new_enrolment_certificate) {
@@ -143,8 +144,8 @@ bool EnrolmentCertificateProvider::re_enrol()
 
     // Build EnrolmentRequest message
     security::EncryptConfirm enrolment_request = build_enrolment_request(
-        ec_id_bb, new_ec_key, ec_provider, ea_certificate.certificate, runtime,
-        psid_ssp_list, curve_name);
+        ec_id_bb, new_ec_key, ec_provider, ea_certificate.certificate, backend,
+        runtime, psid_ssp_list, curve_name);
 
     auto new_enrolment_certificate = run_enrolment_request(enrolment_request);
     if (!new_enrolment_certificate) {
@@ -189,9 +190,8 @@ boost::optional<security::CertificateV3> EnrolmentCertificateProvider::run_enrol
         enrolment_request.session_key.size());
     session_key_file.close();
 
-    return decode_ec_response(*enrolment_response,
-                              enrolment_request.session_key,
-                              ea_certificate.certificate, runtime);
+    return decode_ec_response(*enrolment_response, enrolment_request.session_key,
+                              ea_certificate.certificate, backend, runtime);
 }
 
 void EnrolmentCertificateProvider::set_next_update()

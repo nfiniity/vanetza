@@ -29,6 +29,7 @@ build_enrolment_request(const ByteBuffer &its_id,
                         const security::openssl::EvpKey &verification_key,
                         security::CertificateProvider& active_certificate_provider,
                         const security::CertificateV3& ea_certificate,
+                        security::BackendOpenSsl& backend,
                         const Runtime &runtime,
                         const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list,
                         const std::string& verification_key_curve_name)
@@ -43,7 +44,7 @@ build_enrolment_request(const ByteBuffer &its_id,
         sign_ec_request_data(std::move(inner_ec_request),
                              verification_certificate_provider,
                              security::PayloadTypeV3::RawUnsecured,
-                             runtime);
+                             backend, runtime);
     ByteBuffer inner_ec_request_signed_for_pop_bb = inner_ec_request_signed_for_pop_message.serialize();
     // Decode into a temporary object
     InnerEcRequestSignedForPop_t *tmp_inner_ec_request_signed_for_pop = nullptr;
@@ -70,14 +71,14 @@ build_enrolment_request(const ByteBuffer &its_id,
         sign_ec_request_data(std::move(signed_inner_ec_request_wrap),
                              active_certificate_provider,
                              security::PayloadTypeV3::RawUnsecured,
-                             runtime);
+                             backend, runtime);
     ByteBuffer tmp_outer = signed_outer_ec_request_message.serialize();
     asn1::EtsiTs103097Data signed_outer_ec_request;
     signed_outer_ec_request.decode(tmp_outer);
 
     // Encryption
-    security::EncryptConfirm encrypted_ec_request =
-        encrypt_ec_request(std::move(signed_outer_ec_request), ea_certificate);
+    security::EncryptConfirm encrypted_ec_request = encrypt_ec_request(
+        std::move(signed_outer_ec_request), ea_certificate, backend);
 
     return encrypted_ec_request;
 }
@@ -116,14 +117,14 @@ security::SecuredMessageV3
 sign_ec_request_data(ByteBufferConvertible &&request_data,
                      security::CertificateProvider &certificate_provider,
                      security::PayloadTypeV3 request_data_type,
+                     security::BackendOpenSsl &backend,
                      const Runtime &runtime)
 {
-    std::unique_ptr<security::Backend> backend(security::create_backend("default"));
     // Position is not used for signing here, so we can use a dummy provider
     StoredPositionProvider position_provider;
     security::DefaultSignHeaderPolicy sign_header_policy(runtime, position_provider);
 
-    security::SignService sign_service(security::straight_sign_serviceV3(certificate_provider, *backend, sign_header_policy));
+    security::SignService sign_service(security::straight_sign_serviceV3(certificate_provider, backend, sign_header_policy));
     security::SignRequest sign_request;
     sign_request.its_aid = aid::SCR;
 
@@ -137,10 +138,10 @@ sign_ec_request_data(ByteBufferConvertible &&request_data,
 }
 
 security::EncryptConfirm
-encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &ea_certificate)
+encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request,
+                   const security::CertificateV3 &ea_certificate,
+                   security::BackendOpenSsl &backend)
 {
-    security::BackendOpenSsl backend;
-
     DownPacket packet;
     packet.layer(OsiLayer::Application) = std::move(ec_request);
 
@@ -155,11 +156,11 @@ security::CertificateV3
 decode_ec_response(const security::SecuredMessageV3 &ec_response,
                    const std::array<uint8_t, 16> &session_key,
                    const security::CertificateV3 &ea_certificate,
+                   security::BackendOpenSsl &backend,
                    const Runtime &runtime)
 {
     // Decrypt the response
     assert(ec_response.is_encrypted_message());
-    security::BackendOpenSsl backend;
     security::DecryptService decrypt_service = security::straight_decrypt_serviceV3(backend);
     security::DecryptRequest decrypt_request { ec_response, session_key };
     security::DecryptConfirm decrypt_response = decrypt_service(decrypt_request);

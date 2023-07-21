@@ -9,9 +9,11 @@
 #include <vanetza/security/backend_openssl.hpp>
 #include <vanetza/security/encrypt_service.hpp>
 #include <vanetza/security/decrypt_service.hpp>
+#include <vanetza/security/verify_service.hpp>
 #include <vanetza/security/sign_header_policy.hpp>
 #include <vanetza/security/sign_service.hpp>
 #include <vanetza/security/self_certificate_provider.hpp>
+#include <vanetza/security/certificate_cache.hpp>
 
 namespace vanetza {
 
@@ -22,11 +24,11 @@ build_at_request(const security::openssl::EvpKey &at_verification_key,
                  security::CertificateProvider &ec_provider,
                  const security::CertificateV3 &ea_certificate,
                  const security::CertificateV3 &aa_certificate,
+                 security::BackendOpenSsl &backend,
+                 const Runtime &runtime,
                  const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list,
                  const std::string &at_verification_key_curve_name)
 {
-    security::BackendOpenSsl backend;
-
     // Generate HMAC over the verification key
     ByteBuffer hmac_key = backend.random_bytes(32);
     asn1::PublicVerificationKey at_public_verification_key_asn1 =
@@ -38,7 +40,7 @@ build_at_request(const security::openssl::EvpKey &at_verification_key,
         build_shared_at_request(ec_provider, key_tag, psid_ssp_list);
 
     asn1::EcSignature ec_signature = build_ec_signature(
-        shared_at_request, ec_provider, ea_certificate, backend);
+        shared_at_request, ec_provider, ea_certificate, backend, runtime);
 
     asn1::EtsiTs102941Data inner_at_request_wrapped =
         build_inner_at_request_wrapped(ec_signature, shared_at_request,
@@ -47,7 +49,7 @@ build_at_request(const security::openssl::EvpKey &at_verification_key,
 
     security::SelfCertificateProvider at_verficiation_key_provider(at_verification_key.private_key(), at_verification_key_curve_name);
     return sign_and_encrypt_inner_at_request_wrapped(
-        inner_at_request_wrapped, at_verficiation_key_provider, aa_certificate, backend);
+        inner_at_request_wrapped, at_verficiation_key_provider, aa_certificate, backend, runtime);
 }
 
 asn1::SharedAtRequest
@@ -81,11 +83,11 @@ asn1::EcSignature
 build_ec_signature(asn1::SharedAtRequest shared_at_request,
                    security::CertificateProvider &ec_provider,
                    const security::CertificateV3 &ea_certificate,
-                   security::BackendOpenSsl &backend)
+                   security::BackendOpenSsl &backend,
+                   const Runtime &runtime)
 {
     // Position is not used for signing here, so we can use a dummy provider
     StoredPositionProvider position_provider;
-    ManualRuntime runtime(Clock::at(boost::posix_time::microsec_clock::universal_time()));
     security::DefaultSignHeaderPolicy sign_header_policy(runtime, position_provider);
 
     // Sign the shared_at_request as external payload with our EC key
@@ -151,11 +153,11 @@ security::EncryptConfirm
 sign_and_encrypt_inner_at_request_wrapped(asn1::EtsiTs102941Data &inner_at_request_wrapped,
                                           security::CertificateProvider &at_verification_key_provider,
                                           const security::CertificateV3 &aa_certificate,
-                                          security::BackendOpenSsl &backend)
+                                          security::BackendOpenSsl &backend,
+                                          const Runtime &runtime)
 {
     // Position is not used for signing here, so we can use a dummy provider
     StoredPositionProvider position_provider;
-    ManualRuntime runtime(Clock::at(boost::posix_time::microsec_clock::universal_time()));
     security::DefaultSignHeaderPolicy sign_header_policy(runtime, position_provider);
 
     // Sign the inner_at_request_wrapped with our new AT key
@@ -186,27 +188,33 @@ sign_and_encrypt_inner_at_request_wrapped(asn1::EtsiTs102941Data &inner_at_reque
     return encrypt_confirm;
 }
 
-asn1::EtsiTs103097Certificate
+security::CertificateV3
 decode_at_response(const security::SecuredMessageV3 &at_response,
                    const std::array<uint8_t, 16> &session_key,
-                   security::SecurityEntity &security_entity)
+                   const security::CertificateV3 &aa_certificate,
+                   security::BackendOpenSsl &backend,
+                   const Runtime &runtime)
 {
     // Decrypt the response
     assert(at_response.is_encrypted_message());
-    security::BackendOpenSsl backend;
     security::DecryptService decrypt_service = security::straight_decrypt_serviceV3(backend);
     security::DecryptRequest decrypt_request { at_response, session_key };
     security::DecryptConfirm decrypt_response = decrypt_service(decrypt_request);
 
+    security::CertificateCache cert_cache(runtime);
+    cert_cache.insert_v3(aa_certificate);
+
     // Check signature
-    vanetza::security::SecuredMessageVariant sec_packet = decrypt_response.decrypted_message;
-    vanetza::security::DecapRequest decap_request(sec_packet);
-    auto decap_res = security_entity.decapsulate_packet(std::move(decap_request));
-    assert(decap_res.report == vanetza::security::DecapReport::Success);
+    security::SecuredMessageVariant sec_packet = decrypt_response.decrypted_message;
+    security::VerifyRequest verify_request(sec_packet);
+
+    auto verify_res = security::verify_v3(verify_request, runtime, boost::none, boost::none,
+                                          backend, cert_cache, boost::none, boost::none);
+    assert(verify_res.report == security::VerificationReport::Success);
 
     // Decode the EtsiTs102941Data structure
-    const vanetza::ByteBuffer etsi_ts_102_941_data_bb = decrypt_response.decrypted_message.get_payload();
-    vanetza::asn1::EtsiTs102941Data etsi_ts_102_941_data;
+    const ByteBuffer etsi_ts_102_941_data_bb = decrypt_response.decrypted_message.get_payload();
+    asn1::EtsiTs102941Data etsi_ts_102_941_data;
     etsi_ts_102_941_data.decode(etsi_ts_102_941_data_bb);
     // Check for correct reponse type
     assert(etsi_ts_102_941_data->content.present == EtsiTs102941DataContent_PR_authorizationResponse);
@@ -215,13 +223,9 @@ decode_at_response(const security::SecuredMessageV3 &at_response,
     // Check for successful response
     assert(inner_at_response.responseCode == EnrolmentResponseCode_ok);
 
-    // Copy the certificate into the return value
-    const vanetza::ByteBuffer ec_bb = vanetza::asn1::encode_oer(
-        asn_DEF_EtsiTs103097Certificate, inner_at_response.certificate);
-    vanetza::asn1::EtsiTs103097Certificate ec;
-    ec.decode(ec_bb);
-
-    return ec;
+    const ByteBuffer ec_bb = asn1::encode_oer(asn_DEF_EtsiTs103097Certificate,
+                                              inner_at_response.certificate);
+    return security::CertificateV3(ec_bb);
 }
 
 } // namespace pki
