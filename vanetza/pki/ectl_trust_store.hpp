@@ -44,6 +44,11 @@ struct EctlPaths {
     std::string ec_key;
     // Authorization tickets and keys directory
     std::string at;
+
+    // Authorization ticket (base_path/at/{index}/at_cert.oer)
+    std::string at_cert(uint8_t index) const;
+    // Authorization ticket key (base_path/at/{index}/at_key.der)
+    std::string at_key(uint8_t index) const;
 };
 
 struct RcaMetadata

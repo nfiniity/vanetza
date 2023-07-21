@@ -22,7 +22,7 @@ public:
      * \param backend Backend
      * \param runtime used for signatures
      * \param curl used for HTTP requests
-     * \param ectl_paths paths to EC files
+     * \param ectl_paths paths for EC storage
      * \param psid_ssp_list list of PSID/SSP pairs
      * \param canonical_id canonical id used for registration (place key according to EctlPaths)
      */

@@ -46,6 +46,20 @@ void EctlPaths::create_directories() const {
     boost::filesystem::create_directories(at);
 }
 
+std::string EctlPaths::at_cert(uint8_t index) const
+{
+    std::string dir = at + std::to_string(index) + "/";
+    boost::filesystem::create_directories(dir);
+    return dir + "at_cert.oer";
+}
+
+std::string EctlPaths::at_key(uint8_t index) const
+{
+    std::string dir = at + std::to_string(index) + "/";
+    boost::filesystem::create_directories(dir);
+    return dir + "at_key.der";
+}
+
 EctlTrustStore::EctlTrustStore(const EctlPaths &paths, const Runtime &runtime,
                                CurlWrapper &curl,
                                security::Backend &backend,
