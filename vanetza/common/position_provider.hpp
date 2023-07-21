@@ -15,11 +15,14 @@ namespace vanetza
 class PositionProvider
 {
 public:
+    virtual ~PositionProvider() = default;
+
     /**
      * Get current position fix
      * \return position with latitude and longitude
      */
     virtual const PositionFix& position_fix() = 0;
+
 };
 
 } // namespace vanetza
