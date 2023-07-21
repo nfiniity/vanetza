@@ -101,13 +101,16 @@ bool AuthorizationTicketProvider::refresh_authorization_ticket()
         }
 
         // Request and switch to new AT
+        std::cout << "Trying to update authorization ticket " << static_cast<int>(new_index) << std::endl;
         if (authorize(new_index)) {
             return true;
         }
 
-        std::cout << "Failed to load authorization ticket " << static_cast<int>(new_index) << std::endl;
-        // Try next index
-        new_index = (new_index + 1) % num_authorization_tickets;
+        std::cout << "Failed to update authorization ticket " << static_cast<int>(new_index) << std::endl;
+        // Try next index, skip current index
+        do {
+            new_index = (new_index + 1) % num_authorization_tickets;
+        } while (new_index == current_index);
     }
 
     if (!stored_at || !stored_at_key) {
