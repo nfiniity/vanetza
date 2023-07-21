@@ -7,7 +7,11 @@
 #include <vanetza/security/sign_service.hpp>
 #include <vanetza/security/encrypt_service.hpp>
 #include <vanetza/security/decrypt_service.hpp>
+#include <vanetza/security/verify_service.hpp>
+#include <vanetza/security/default_certificate_validator.hpp>
 #include <vanetza/security/backend_openssl.hpp>
+#include <vanetza/security/trust_store.hpp>
+#include <vanetza/security/certificate_cache.hpp>
 #include <vanetza/pki/enrolment_certificates.hpp>
 #include <vanetza/common/its_aid.hpp>
 #include <vanetza/common/stored_position_provider.hpp>
@@ -25,6 +29,7 @@ build_enrolment_request(const ByteBuffer &its_id,
                         const security::openssl::EvpKey &verification_key,
                         security::CertificateProvider& active_certificate_provider,
                         const security::CertificateV3& ea_certificate,
+                        const Runtime &runtime,
                         const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list,
                         const std::string& verification_key_curve_name)
 {
@@ -37,7 +42,8 @@ build_enrolment_request(const ByteBuffer &its_id,
     security::SecuredMessageV3 inner_ec_request_signed_for_pop_message =
         sign_ec_request_data(std::move(inner_ec_request),
                              verification_certificate_provider,
-                             security::PayloadTypeV3::RawUnsecured);
+                             security::PayloadTypeV3::RawUnsecured,
+                             runtime);
     ByteBuffer inner_ec_request_signed_for_pop_bb = inner_ec_request_signed_for_pop_message.serialize();
     // Decode into a temporary object
     InnerEcRequestSignedForPop_t *tmp_inner_ec_request_signed_for_pop = nullptr;
@@ -63,7 +69,8 @@ build_enrolment_request(const ByteBuffer &its_id,
     security::SecuredMessageV3 signed_outer_ec_request_message =
         sign_ec_request_data(std::move(signed_inner_ec_request_wrap),
                              active_certificate_provider,
-                             security::PayloadTypeV3::RawUnsecured);
+                             security::PayloadTypeV3::RawUnsecured,
+                             runtime);
     ByteBuffer tmp_outer = signed_outer_ec_request_message.serialize();
     asn1::EtsiTs103097Data signed_outer_ec_request;
     signed_outer_ec_request.decode(tmp_outer);
@@ -108,12 +115,12 @@ void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const asn1::SequenceO
 security::SecuredMessageV3
 sign_ec_request_data(ByteBufferConvertible &&request_data,
                      security::CertificateProvider &certificate_provider,
-                     security::PayloadTypeV3 request_data_type)
+                     security::PayloadTypeV3 request_data_type,
+                     const Runtime &runtime)
 {
     std::unique_ptr<security::Backend> backend(security::create_backend("default"));
     // Position is not used for signing here, so we can use a dummy provider
     StoredPositionProvider position_provider;
-    ManualRuntime runtime(Clock::at(boost::posix_time::microsec_clock::universal_time()));
     security::DefaultSignHeaderPolicy sign_header_policy(runtime, position_provider);
 
     security::SignService sign_service(security::straight_sign_serviceV3(certificate_provider, *backend, sign_header_policy));
@@ -144,10 +151,12 @@ encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::Certific
     return encrypt_confirm;
 }
 
-asn1::EtsiTs103097Certificate
+security::CertificateV3
 decode_ec_response(const security::SecuredMessageV3 &ec_response,
                    const std::array<uint8_t, 16> &session_key,
-                   security::SecurityEntity &security_entity) {
+                   const security::CertificateV3 &ea_certificate,
+                   const Runtime &runtime)
+{
     // Decrypt the response
     assert(ec_response.is_encrypted_message());
     security::BackendOpenSsl backend;
@@ -155,11 +164,15 @@ decode_ec_response(const security::SecuredMessageV3 &ec_response,
     security::DecryptRequest decrypt_request { ec_response, session_key };
     security::DecryptConfirm decrypt_response = decrypt_service(decrypt_request);
 
-    vanetza::security::SecuredMessageVariant sec_packet = decrypt_response.decrypted_message;
-    vanetza::security::DecapRequest decap_request(sec_packet);
+    security::CertificateCache cert_cache(runtime);
+    cert_cache.insert_v3(ea_certificate);
 
-    auto decap_res = security_entity.decapsulate_packet(std::move(decap_request));
-    assert(decap_res.report == vanetza::security::DecapReport::Success);
+    security::SecuredMessageVariant sec_packet = decrypt_response.decrypted_message;
+    security::VerifyRequest verify_request(sec_packet);
+
+    auto verify_res = security::verify_v3(verify_request, runtime, boost::none, boost::none,
+                                          backend, cert_cache, boost::none, boost::none);
+    assert(verify_res.report == vanetza::security::VerificationReport::Success);
 
     // Decode the EtsiTs102941Data structure
     const vanetza::ByteBuffer etsi_ts_102_941_data_bb = decrypt_response.decrypted_message.get_payload();
@@ -175,10 +188,7 @@ decode_ec_response(const security::SecuredMessageV3 &ec_response,
     // Copy the certificate into the return value
     const vanetza::ByteBuffer ec_bb = vanetza::asn1::encode_oer(
         asn_DEF_EtsiTs103097Certificate, ec_enrolment_response.certificate);
-    vanetza::asn1::EtsiTs103097Certificate ec;
-    ec.decode(ec_bb);
-
-    return ec;
+    return security::CertificateV3(ec_bb);
 }
 
 } // namespace pki

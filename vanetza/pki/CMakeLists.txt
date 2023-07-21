@@ -3,6 +3,7 @@ add_vanetza_component(pki
     curl_wrapper.cpp
     ectl_trust_store.cpp
     enrolment_certificates.cpp
+    enrolment_certificate_provider.cpp
 )
 target_link_libraries(pki PUBLIC common net asn1 security curl boost_filesystem)
 

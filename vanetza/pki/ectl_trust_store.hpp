@@ -38,6 +38,10 @@ struct EctlPaths {
     std::string reg_key;
     // Enrollment certificate and key directory
     std::string ec;
+    // Enrollment certificate (base_path/ec/ec_cert.oer)
+    std::string ec_cert;
+    // Enrollment certificate key (base_path/ec/ec_key.der)
+    std::string ec_key;
     // Authorization tickets and keys directory
     std::string at;
 };

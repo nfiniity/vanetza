@@ -31,7 +31,8 @@ std::string convert_asn1_url(const Url_t &url, bool add_trailing_slash)
 EctlPaths::EctlPaths(const std::string &base_path)
     : ctl(base_path + "ctl/"), tlm_cert(ctl + "tlm_cert.oer"),
       ectl(ctl + "ectl.oer"), crl(base_path + "crl/"), reg(base_path + "reg/"),
-      reg_key(reg + "reg_key.der"), ec(base_path + "ec/"), at(base_path + "at/")
+      reg_key(reg + "reg_key.der"), ec(base_path + "ec/"), ec_cert(ec + "ec_cert.oer"),
+      ec_key(ec + "ec_key.der"), at(base_path + "at/")
 {
     // Initialize directories
     create_directories();

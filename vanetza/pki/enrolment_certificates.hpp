@@ -21,14 +21,17 @@ namespace pki {
  * \param verification_key new EC public key
  * \param active_certificate_provider certificate provider for current EC or self-signed dummy
  * \param ea_certificate certificate of EA
+ * \param runtime used for signature
  * \param psid_ssp_list list of PSID/SSP pairs
  * \param verification_key_curve_name name of curve used for new verification key
+ * \return EncryptConfirm containing encrypted EC request and session key
 */
 security::EncryptConfirm
 build_enrolment_request(const ByteBuffer &its_id,
                         const security::openssl::EvpKey &verification_key,
                         security::CertificateProvider& active_certificate_provider,
                         const security::CertificateV3& ea_certificate,
+                        const Runtime &runtime,
                         const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list = boost::none,
                         const std::string& verification_key_curve_name = "prime256v1");
 
@@ -44,7 +47,8 @@ void set_psid_ssps(asn1::InnerEcRequest& inner_ec_request, const asn1::SequenceO
 security::SecuredMessageV3
 sign_ec_request_data(ByteBufferConvertible &&request_data,
                      security::CertificateProvider &certificate_provider,
-                     security::PayloadTypeV3 request_data_type);
+                     security::PayloadTypeV3 request_data_type,
+                     const Runtime &runtime);
 
 security::EncryptConfirm
 encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::CertificateV3 &ea_certificate);
@@ -53,12 +57,15 @@ encrypt_ec_request(asn1::EtsiTs103097Data &&ec_request, const security::Certific
  * Decrypt, verify and parse an Enrolment Response
  * \param ec_response encrypted EC response message
  * \param session_key session key used for encryption
- * \param security_entity security entity used for signature verification
+ * \param ea_certificate certificate of EA
+ * \param runtime used for signature verification
+ * \return Enrolment certificate
 */
-asn1::EtsiTs103097Certificate
+security::CertificateV3
 decode_ec_response(const security::SecuredMessageV3 &ec_response,
                    const std::array<uint8_t, 16> &session_key,
-                   security::SecurityEntity &security_entity);
+                   const security::CertificateV3 &ea_certificate,
+                   const Runtime &runtime);
 }
 
 }
