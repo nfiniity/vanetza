@@ -100,8 +100,10 @@ EctlSecurityEntity::decapsulate_packet(security::DecapRequest&& request)
     return delegating_entity.decapsulate_packet(std::move(request));
 }
 
-vanetza::asn1::SequenceOfPsidSsp get_psid_ssp_list()
+asn1::SequenceOfPsidSsp psid_ssp_list_example_manual()
 {
+    // Example code for PSID/SSP list creation
+
     // PSID/SSP for CA
     asn1::PsidSsp ca_psid_ssp;
     ca_psid_ssp->psid = aid::CA;
@@ -129,7 +131,49 @@ vanetza::asn1::SequenceOfPsidSsp get_psid_ssp_list()
     ASN_SEQUENCE_ADD(&psid_ssp_list->list,
                      asn1::copy(asn_DEF_PsidSsp, &(*gn_mgmt_psid_ssp)));
 
+    xer_fprint(stdout, &asn_DEF_SequenceOfPsidSsp, &(*psid_ssp_list));
+
     return psid_ssp_list;
+}
+
+// Or read from file
+const std::string psid_ssp_xml =
+R"(<SequenceOfPsidSsp>
+    <PsidSsp>
+        <psid>36</psid>
+        <ssp>
+            <bitmapSsp>01 FF FC</bitmapSsp>
+        </ssp>
+    </PsidSsp>
+    <PsidSsp>
+        <psid>37</psid>
+        <ssp>
+            <bitmapSsp>01 FF FF FF</bitmapSsp>
+        </ssp>
+    </PsidSsp>
+    <PsidSsp>
+        <psid>141</psid>
+    </PsidSsp>
+</SequenceOfPsidSsp>)";
+
+asn1::SequenceOfPsidSsp psid_ssp_list_example_xml()
+{
+    ByteBuffer buffer(psid_ssp_xml.begin(), psid_ssp_xml.end());
+    asn1::SequenceOfPsidSspXml psid_ssp_list_xml;
+    psid_ssp_list_xml.decode(buffer);
+
+    // Swap into OER representation
+    asn1::SequenceOfPsidSsp psid_ssp_list;
+    psid_ssp_list.swap(psid_ssp_list_xml);
+    return psid_ssp_list;
+}
+
+security::HashedId8 hashed_id_from_hex_string(const std::string &hex_string)
+{
+    assert(hex_string.size() == 16);
+    security::HashedId8 hashed_id;
+    boost::algorithm::unhex(hex_string, hashed_id.data());
+    return hashed_id;
 }
 
 } // namespace pki

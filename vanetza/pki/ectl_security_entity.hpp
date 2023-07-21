@@ -14,6 +14,18 @@ namespace vanetza
 namespace pki
 {
 
+// Example for manual PSID/SSP list creation
+asn1::SequenceOfPsidSsp psid_ssp_list_example_manual();
+
+// Example for PSID/SSP list creation from XML
+asn1::SequenceOfPsidSsp psid_ssp_list_example_xml();
+
+/*
+ * Convert a hex string to a HashedId8
+ * \param hex_string hex string with 16 characters
+ */
+security::HashedId8 hashed_id_from_hex_string(const std::string &hex_string);
+
 class EctlSecurityEntity : public security::SecurityEntity
 {
 private:
@@ -31,10 +43,15 @@ private:
 
 public:
     /**
-     * ECTL PKI Security Context
+     * ECTL PKI Security Context.
+     * If the station is already enrolled, put the EC and key in
+     * trust_store_path/ec/ec_cert.oer and trust_store_path/ec/ec_key.der.
+     * Otherwise supply canonical_id and the canonical key in trust_store_path/reg/reg_key.der.
+     * For details on the lifecycle, see ETSI TS 102 941 V1.4.1.
+     * See functions above for id and psid_ssp_list creation.
      * \param runtime runtime
      * \param positioning position provider
-     * \param trust_store_path path to trust store
+     * \param trust_store_path path to trust store (with trailing slash)
      * \param rca_id id of root CA
      * \param ea_id id of enrolment authority
      * \param aa_id id of authorization authority
@@ -60,8 +77,6 @@ public:
     security::DecapConfirm
     decapsulate_packet(security::DecapRequest &&request) override;
 };
-
-vanetza::asn1::SequenceOfPsidSsp get_psid_ssp_list();
 
 } // namespace pki
 

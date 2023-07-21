@@ -19,6 +19,13 @@ public:
     SequenceOfPsidSsp() : wrapper(asn_DEF_SequenceOfPsidSsp) {}
 };
 
+class SequenceOfPsidSspXml : public asn1c_xer_wrapper<SequenceOfPsidSsp_t>
+{
+public:
+    using wrapper = asn1c_xer_wrapper<SequenceOfPsidSsp_t>;
+    SequenceOfPsidSspXml() : wrapper(asn_DEF_SequenceOfPsidSsp) {}
+};
+
 class PsidSsp : public asn1c_oer_wrapper<PsidSsp_t>
 {
 public:
