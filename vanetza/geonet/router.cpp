@@ -126,7 +126,7 @@ using PendingPacketGbc = PendingPacket<GbcPdu>;
 
 const access::EtherType ether_type = access::ethertype::GeoNetworking;
 
-Router::Router(Runtime& rt, const MIB& mib) :
+Router::Router(Runtime& rt, MIB& mib) :
     m_mib(mib),
     m_runtime(rt),
     m_request_interface(get_default_request_interface()),
@@ -191,7 +191,23 @@ void Router::set_transport_handler(UpperProtocol proto, TransportInterface* ifc)
 
 void Router::set_security_entity(security::SecurityEntity* entity)
 {
+    if (m_security_entity != nullptr && m_id_change_callback) {
+        // unregister previous callback
+        m_security_entity->unregister_id_change_callback(*m_id_change_callback);
+        m_id_change_callback.release();
+    }
+
+    // set new security entity and register callback
     m_security_entity = entity;
+    if (entity != nullptr) {
+        security::IdChangeCallback cb = [this](const security::HashedId8& new_id) {
+            MacAddress new_addr(new_id);
+            m_mib.itsGnLocalGnAddr.mid(new_addr);
+            m_local_position_vector.gn_addr.mid(new_addr);
+        };
+        m_id_change_callback.reset(new security::IdChangeCallbackIterator(
+            m_security_entity->register_id_change_callback(std::move(cb))));
+    }
 }
 
 

@@ -41,7 +41,7 @@ AuthorizationTicketProvider::AuthorizationTicketProvider(
         throw std::invalid_argument("AuthorizationTicketProvider: AA certificate must have access point URL");
     }
 
-    refresh_authorization_ticket();
+    // Don't refresh here, callbacks for ID change in Router are not set up yet
 }
 
 int AuthorizationTicketProvider::version()
@@ -57,7 +57,8 @@ const security::ecdsa256::PrivateKey& AuthorizationTicketProvider::own_private_k
 
 std::list<security::CertificateVariant> AuthorizationTicketProvider::own_chain()
 {
-    return {};
+    // TODO: check this
+    return {aa_certificate.certificate};
 }
 
 const security::CertificateVariant& AuthorizationTicketProvider::own_certificate()
@@ -120,6 +121,8 @@ bool AuthorizationTicketProvider::refresh_authorization_ticket()
         std::cerr << "Failed to load any authorization ticket, keeping current AT" << std::endl;
         return false;
     }
+
+    std::cerr << "Loading outdated AT" << std::endl;
 
     authorization_ticket = stored_at;
     authorization_ticket_key = stored_at_key->private_key();

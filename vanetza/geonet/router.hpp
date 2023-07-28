@@ -104,7 +104,7 @@ public:
         Outside_Destination_Area
     };
 
-    Router(Runtime&, const MIB&);
+    Router(Runtime&, MIB&);
     ~Router();
 
     /**
@@ -177,7 +177,7 @@ public:
 
     /**
      * \brief Register security entity used when itsGnSecurity is enabled
-     *
+     * Also sets the ID change callback.
      * \param entity security entity
      */
     void set_security_entity(security::SecurityEntity* entity);
@@ -532,7 +532,7 @@ private:
      */
     std::unique_ptr<GbcPdu> create_gbc_pdu(const GbcDataRequest&);
 
-    const MIB& m_mib;
+    MIB& m_mib;
     Runtime& m_runtime;
     dcc::RequestInterface* m_request_interface;
     DccFieldGenerator* m_dcc_field_generator;
@@ -547,6 +547,7 @@ private:
     Repeater m_repeater;
     std::mt19937 m_random_gen;
     GbcMemory m_gbc_memory;
+    std::unique_ptr<security::IdChangeCallbackIterator> m_id_change_callback;
 };
 
 /**

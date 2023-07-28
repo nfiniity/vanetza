@@ -56,6 +56,7 @@ public:
      * \param ea_id id of enrolment authority
      * \param aa_id id of authorization authority
      * \param num_authorization_tickets number of authorization tickets to store
+     * \param access_id_change_callback callback for access layer id change
      * \param psid_ssp_list list of PSID/SSP pairs (optional)
      * \param canonical_id canonical id (optional)
      */
@@ -67,6 +68,7 @@ public:
         const security::HashedId8 &ea_id,
         const security::HashedId8 &aa_id,
         uint8_t num_authorization_tickets,
+        security::IdChangeCallback &&access_id_change_callback,
         const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list,
         const boost::optional<std::string> &canonical_id);
 

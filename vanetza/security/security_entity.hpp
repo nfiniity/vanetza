@@ -11,6 +11,9 @@ namespace vanetza
 namespace security
 {
 
+using IdChangeCallback = std::function<void(const security::HashedId8&)>;
+using IdChangeCallbackIterator = std::list<IdChangeCallback>::iterator;
+
 class SecurityEntity
 {
 public:
@@ -37,6 +40,29 @@ public:
     virtual DecapConfirm decapsulate_packet(DecapRequest&& request) = 0;
 
     virtual ~SecurityEntity() = default;
+
+    /**
+     * \brief Calls all registered ID change callbacks
+     * \param new_id new ID
+     */
+    void change_id(const security::HashedId8 &new_id) const;
+
+    /**
+     * \brief Register a callback to be called when the ID changes
+     * \param callback callback to register
+     * \return iterator to the registered callback
+     */
+    IdChangeCallbackIterator register_id_change_callback(IdChangeCallback &&callback);
+
+    /**
+     * \brief Unregister a callback
+     * \param it iterator to the callback to unregister
+     */
+    void unregister_id_change_callback(const IdChangeCallbackIterator &it);
+
+private:
+    // Use a list so iterators are not invalidated when a callback is removed
+    std::list<IdChangeCallback> id_change_callbacks;
 };
 
 } // namespace security

@@ -75,6 +75,7 @@ EctlSecurityEntity::EctlSecurityEntity(
     const security::HashedId8 &ea_id,
     const security::HashedId8 &aa_id,
     uint8_t num_authorization_tickets,
+    security::IdChangeCallback &&access_id_change_callback,
     const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list,
     const boost::optional<std::string> &canonical_id)
     : curl(runtime), paths(trust_store_path), trust_store(paths, runtime, curl, backend),
@@ -87,7 +88,10 @@ EctlSecurityEntity::EctlSecurityEntity(
         sign_header_policy(runtime, positioning), cert_cache(runtime),
         cert_validator(backend, cert_cache, trust_store),
         delegating_entity(build_delegating_entity(runtime, backend, at_provider, cert_validator,
-                          cert_cache, sign_header_policy, positioning)) {}
+                          cert_cache, sign_header_policy, positioning))
+{
+    register_id_change_callback(std::move(access_id_change_callback));
+}
 
 security::EncapConfirm
 EctlSecurityEntity::encapsulate_packet(security::EncapRequest &&request) {

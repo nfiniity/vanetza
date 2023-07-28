@@ -26,6 +26,12 @@ MacAddress::MacAddress(std::initializer_list<uint8_t> args)
     std::copy_n(args.begin(), std::min(args.size(), octets.size()), octets.begin());
 }
 
+MacAddress::MacAddress(const security::HashedId8 &hashed_id)
+{
+    // Copy last 6 bytes of hashed ID
+    std::copy_n(hashed_id.begin() + 2, octets.size(), octets.begin());
+}
+
 bool operator==(const MacAddress& lhs, const MacAddress& rhs)
 {
     return (lhs.octets == rhs.octets);

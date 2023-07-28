@@ -2,6 +2,7 @@
 #define MAC_ADDRESS_HPP_FDINBLBS
 
 #include <vanetza/common/serialization.hpp>
+#include <vanetza/security/basic_elements.hpp>
 #include <boost/operators.hpp>
 #include <boost/optional.hpp>
 #include <array>
@@ -22,6 +23,7 @@ public:
 
     MacAddress();
     MacAddress(std::initializer_list<uint8_t> args);
+    explicit MacAddress(const security::HashedId8& hashed_id);
 
     std::array<uint8_t, length_bytes> octets;
 };

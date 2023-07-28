@@ -11,8 +11,8 @@
 
 using namespace vanetza;
 
-RouterContext::RouterContext(const geonet::MIB& mib, TimeTrigger& trigger, vanetza::PositionProvider& positioning, vanetza::security::SecurityEntity* security_entity) :
-    mib_(mib), router_(trigger.runtime(), mib_),
+RouterContext::RouterContext(geonet::MIB& mib, TimeTrigger& trigger, vanetza::PositionProvider& positioning, vanetza::security::SecurityEntity* security_entity) :
+    mib_(mib), router_(trigger.runtime(), mib),
     trigger_(trigger), positioning_(positioning)
 {
     router_.packet_dropped = std::bind(&RouterContext::log_packet_drop, this, std::placeholders::_1);

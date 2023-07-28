@@ -17,7 +17,7 @@ class TimeTrigger;
 class RouterContext
 {
 public:
-    RouterContext(const vanetza::geonet::MIB&, TimeTrigger&, vanetza::PositionProvider&, vanetza::security::SecurityEntity*);
+    RouterContext(vanetza::geonet::MIB&, TimeTrigger&, vanetza::PositionProvider&, vanetza::security::SecurityEntity*);
     ~RouterContext();
     void enable(Application*);
     void disable(Application*);
@@ -37,7 +37,7 @@ private:
     void update_position_vector();
     void update_packet_flow(const vanetza::geonet::LongPositionVector&);
 
-    vanetza::geonet::MIB mib_;
+    const vanetza::geonet::MIB& mib_;
     vanetza::geonet::Router router_;
     TimeTrigger& trigger_;
     vanetza::PositionProvider& positioning_;
