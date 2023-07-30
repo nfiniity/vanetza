@@ -24,6 +24,8 @@ BackendCryptoPP::sign_data(const ecdsa256::PrivateKey &generic_key,
                            const ByteBuffer &data,
                            const std::string &curve_name)
 {
+    /* TODO: Signing and verification is broken with 384-bit curves because the
+             PrivateKey and PublicKey aliases use SHA-256 instead of SHA-384 */
     return sign_data(m_private_cache[generic_key], data);
 }
 
