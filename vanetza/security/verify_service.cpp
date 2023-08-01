@@ -456,8 +456,11 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
                 if (chain.empty()) {
                     confirm.report = VerificationReport::Signer_Certificate_Not_Found;
                     return confirm;
+                }
 
-                } else if (chain.size() > 3) {
+                // first certificate must be the authorization ticket
+                signer_hash = calculate_hash(chain.front());
+                if (chain.size() > 3) {
                     // prevent DoS by sending very long chains, maximum length is three certificates, because:
                     // AT → AA → Root and no other signatures are allowed, sending the Root is optional
                     confirm.report = VerificationReport::Invalid_Certificate;
@@ -497,8 +500,7 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
 
                     cert_cache->insert(cert);
                 }
-                // first certificate must be the authorization ticket
-                signer_hash =  calculate_hash(chain.front());
+
                 possible_certificates.push_back(chain.front());
                 break;
             }
