@@ -2,8 +2,6 @@
 #include <vanetza/security/persistence.hpp>
 #include <vanetza/security/secured_message.hpp>
 #include <vanetza/security/verify_service.hpp>
-#include <vanetza/security/default_certificate_validator.hpp>
-#include <vanetza/asn1/etsi_ts_102_941_data.hpp>
 #include <vanetza/asn1/utils.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/hex.hpp>
@@ -303,77 +301,43 @@ EctlTrustStore::parse_ectl(const ByteBuffer &ectl_buffer) const
     tlm_trust_store.insert(*tlm_cert);
     security::DefaultCertificateValidator tlm_cert_validator(backend, boost::none, tlm_trust_store);
 
-    // Validate ECTL signature
-    security::SecuredMessageVariant sec_packet = security::SecuredMessageV3(ectl_buffer);
-    security::VerifyRequest verify_request(sec_packet);
-    auto verify_res =
-        security::verify_v3(verify_request, runtime, boost::none, tlm_cert_validator,
-                            backend, boost::none, boost::none, boost::none);
-    if (verify_res.report != security::VerificationReport::Success) {
-        std::cerr << "Failed to verify ECTL" << std::endl;
-        return boost::none;
-    }
-    if (!verify_res.certificate_id) {
-        std::cerr << "No certificate ID in parse_ectl" << std::endl;
-        return boost::none;
-    }
-    if (verify_res.certificate_id.get() != tlm_cert->calculate_hash()) {
-        std::cerr << "ECTL was not signed by TLM certificate" << std::endl;
+    auto etsi_ts_102_941_data = parse_etsi_ts_102_941_data(
+        ectl_buffer, tlm_cert->calculate_hash(), tlm_cert_validator);
+    if (!etsi_ts_102_941_data) {
         return boost::none;
     }
 
-    // Extract ECTL
-    const security::SecuredMessageV3 &sec_packet_v3 =
-        boost::get<security::SecuredMessageV3>(sec_packet);
-    asn1::EtsiTs102941Data etsi_ts102_941_data;
-    etsi_ts102_941_data.decode(sec_packet_v3.get_payload());
-    if (etsi_ts102_941_data->content.present != EtsiTs102941DataContent_PR_certificateTrustListTlm) {
+    auto &content = etsi_ts_102_941_data.get()->content;
+    if (content.present != EtsiTs102941DataContent_PR_certificateTrustListTlm) {
         std::cerr << "ECTL message does not contain a TLM certificate trust list" << std::endl;
         return boost::none;
     }
 
     asn1::ToBeSignedTlmCtl ectl;
-    std::swap(*ectl, etsi_ts102_941_data->content.choice.certificateTrustListTlm);
+    std::swap(*ectl, content.choice.certificateTrustListTlm);
     return ectl;
 }
 
 boost::optional<asn1::ToBeSignedRcaCtl>
 EctlTrustStore::parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id)
 {
-    // Validate RCA CTL signature
-    security::SecuredMessageVariant sec_packet = security::SecuredMessageV3(buffer);
-    security::VerifyRequest verify_request(sec_packet);
     // RCA cert should be in trust store, so we can use it for verification
     security::DefaultCertificateValidator rca_cert_validator(backend, boost::none, *this);
 
-    auto verify_res =
-        security::verify_v3(verify_request, runtime, boost::none, rca_cert_validator,
-                            backend, boost::none, boost::none, boost::none);
-    if (verify_res.report != security::VerificationReport::Success) {
-        std::cerr << "Failed to verify RCA CTL" << std::endl;
-        return boost::none;
-    }
-    if (!verify_res.certificate_id) {
-        std::cerr << "No certificate ID in get_subcert" << std::endl;
-        return boost::none;
-    }
-    if (verify_res.certificate_id.get() != rca_id) {
-        std::cerr << "RCA CTL was not signed by given RCA ID" << std::endl;
+    auto etsi_ts_102_941_data =
+        parse_etsi_ts_102_941_data(buffer, rca_id, rca_cert_validator);
+    if (!etsi_ts_102_941_data) {
         return boost::none;
     }
 
-    // Extract RCA CTL
-    const security::SecuredMessageV3 &sec_packet_v3 =
-        boost::get<security::SecuredMessageV3>(sec_packet);
-    asn1::EtsiTs102941Data etsi_ts102_941_data;
-    etsi_ts102_941_data.decode(sec_packet_v3.get_payload());
-    if (etsi_ts102_941_data->content.present != EtsiTs102941DataContent_PR_certificateTrustListRca) {
+    auto &content = etsi_ts_102_941_data.get()->content;
+    if (content.present != EtsiTs102941DataContent_PR_certificateTrustListRca) {
         std::cerr << "RCA CTL message does not contain a RCA CTL" << std::endl;
         return boost::none;
     }
 
     asn1::ToBeSignedRcaCtl rca_ctl;
-    std::swap(*rca_ctl, etsi_ts102_941_data->content.choice.certificateTrustListRca);
+    std::swap(*rca_ctl, content.choice.certificateTrustListRca);
     return rca_ctl;
 }
 
@@ -451,8 +415,6 @@ void EctlTrustStore::refresh_rca_ctl(const security::HashedId8 &rca_id, RcaMetad
 {
     std::string rca_id_hex;
     boost::algorithm::hex(rca_id, std::back_inserter(rca_id_hex));
-
-    // TODO: Check and set next update, load from cache
 
     // Check if update is needed
     if (metadata.next_ctl_update > runtime.now()) {
@@ -612,6 +574,39 @@ EctlTrustStore::get_subcert(const security::HashedId8 &rca_id,
         return boost::none;
     }
     return subcert->second;
+}
+
+boost::optional<asn1::EtsiTs102941Data>
+EctlTrustStore::parse_etsi_ts_102_941_data(const ByteBuffer &message_buffer,
+                                           const security::HashedId8 &expected_signer_id,
+                                           security::CertificateValidator &cert_validator) const
+{
+    // Validate signature
+    security::SecuredMessageVariant sec_packet = security::SecuredMessageV3(message_buffer);
+    security::VerifyRequest verify_request(sec_packet);
+    auto verify_res =
+        security::verify_v3(verify_request, runtime, boost::none, cert_validator,
+                            backend, boost::none, boost::none, boost::none);
+    if (verify_res.report != security::VerificationReport::Success) {
+        std::cerr << "Failed to verify signature" << std::endl;
+        return boost::none;
+    }
+    if (!verify_res.certificate_id) {
+        std::cerr << "No certificate ID in parse_etsi_ts_102_941_data" << std::endl;
+        return boost::none;
+    }
+    if (verify_res.certificate_id.get() != expected_signer_id) {
+        std::cerr << "EtsiTs102941Data is not signed by expected signer" << std::endl;
+        return boost::none;
+    }
+
+    // Extract EtsiTs102941Data
+    const security::SecuredMessageV3 &sec_packet_v3 =
+        boost::get<security::SecuredMessageV3>(sec_packet);
+    asn1::EtsiTs102941Data etsi_ts102_941_data;
+    etsi_ts102_941_data.decode(sec_packet_v3.get_payload());
+
+    return etsi_ts102_941_data;
 }
 
 } // namespace pki

@@ -5,8 +5,10 @@
 #include <vanetza/security/trust_store.hpp>
 #include <vanetza/security/sha.hpp>
 #include <vanetza/security/security_entity.hpp>
+#include <vanetza/security/default_certificate_validator.hpp>
 #include <vanetza/common/runtime.hpp>
 #include <vanetza/asn1/ctl.hpp>
+#include <vanetza/asn1/etsi_ts_102_941_data.hpp>
 #include <set>
 #include <map>
 
@@ -148,6 +150,11 @@ public:
     boost::optional<asn1::ToBeSignedRcaCtl>
     parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id);
     bool load_rca_ctl(const asn1::ToBeSignedRcaCtl &rca_ctl, RcaMetadata &metadata) const;
+
+    boost::optional<asn1::EtsiTs102941Data> parse_etsi_ts_102_941_data(
+        const ByteBuffer &message_buffer,
+        const security::HashedId8 &expected_signer_id,
+        security::CertificateValidator &cert_validator) const;
 
     const EctlPaths &paths;
     const Runtime &runtime;
