@@ -162,6 +162,7 @@ Router::Router(Runtime& rt, MIB& mib) :
 Router::~Router()
 {
     m_runtime.cancel(this);
+    set_security_entity(nullptr);
 }
 
 void Router::update_position(const PositionFix& position_fix)
@@ -199,15 +200,16 @@ void Router::set_security_entity(security::SecurityEntity* entity)
 
     // set new security entity and register callback
     m_security_entity = entity;
-    if (entity != nullptr) {
-        security::IdChangeCallback cb = [this](const security::HashedId8& new_id) {
-            MacAddress new_addr(new_id);
-            m_mib.itsGnLocalGnAddr.mid(new_addr);
-            m_local_position_vector.gn_addr.mid(new_addr);
-        };
-        m_id_change_callback.reset(new security::IdChangeCallbackIterator(
-            m_security_entity->register_id_change_callback(std::move(cb))));
+    if (entity == nullptr) {
+        return;
     }
+    security::IdChangeCallback cb = [this](const security::HashedId8& new_id) {
+        MacAddress new_addr(new_id);
+        m_mib.itsGnLocalGnAddr.mid(new_addr);
+        m_local_position_vector.gn_addr.mid(new_addr);
+    };
+    m_id_change_callback.reset(new security::IdChangeCallbackIterator(
+        m_security_entity->register_id_change_callback(std::move(cb))));
 }
 
 
@@ -523,6 +525,7 @@ void Router::indicate_secured(IndicationContextBasic& ctx, const BasicHeader& ba
 
         // check whether the received packet is valid
         if (DecapReport::Success == decap_confirm.report) {
+            std::cout << "decapsulated packet with AID " << decap_confirm.its_aid << "\n";
             boost::apply_visitor(visitor, decap_confirm.plaintext_payload);
         } else if (SecurityDecapHandling::Non_Strict == m_mib.itsGnSnDecapResultHandling) {
             // according to ETSI EN 302 636-4-1 v1.2.1 section 9.3.3 Note 2
