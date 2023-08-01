@@ -148,12 +148,12 @@ bool check_generation_location(const SecuredMessageVariant& message, const Certi
                 if(!its_aid){
                     return nullptr;
                 }
-                return std::move(std::unique_ptr<long>(new long(its_aid->get())));
+                return std::make_unique<long>(its_aid->get());
             }
 
             std::unique_ptr<long> operator()(const SecuredMessageV3& message) const
             {
-                return std::move(std::unique_ptr<long>(new long(message.get_psid())));
+                return std::make_unique<long>(message.get_psid());
             }
         };
     std::unique_ptr<long> its_aid = boost::apply_visitor(its_aid_visitor(), message);
@@ -936,20 +936,24 @@ VerifyService dummy_verify_service(VerificationReport report, CertificateValidit
         VerifyConfirm confirm;
         confirm.report = report;
         confirm.certificate_validity = validity;
-        class int_x_visitor : public boost::static_visitor<const IntX*>
+        class int_x_visitor : public boost::static_visitor<const boost::optional<IntX>>
         {
         public:
-            const IntX* operator()(const SecuredMessageV2& message) const
+            boost::optional<IntX> operator()(const SecuredMessageV2& message) const
             {
-                return message.header_field<HeaderFieldType::Its_Aid>();
+                auto its_aid_ptr = message.header_field<HeaderFieldType::Its_Aid>();
+                if (!its_aid_ptr) {
+                    return boost::none;
+                }
+                return *its_aid_ptr;
             }
 
-            const IntX* operator()(const SecuredMessageV3& message) const
+            boost::optional<IntX> operator()(const SecuredMessageV3& message) const
             {
-                return new IntX(message.get_psid());
+                return IntX(message.get_psid());
             }
         };
-        const IntX* its_aid = boost::apply_visitor(int_x_visitor(), request.secured_message);
+        auto its_aid = boost::apply_visitor(int_x_visitor(), request.secured_message);
         confirm.its_aid = its_aid ? its_aid->get() : 0;
         return confirm;
     };
