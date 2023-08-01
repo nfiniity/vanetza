@@ -36,7 +36,7 @@ public:
      * \param cert_id hash identifier of the subordinate EA/AA certificate
      * \return true if certificate is revoked, false otherwise
     */
-    virtual bool is_revoked(const HashedId8& issuer_id, const HashedId8& cert_id) const
+    virtual bool is_revoked(const HashedId8& issuer_id, const HashedId8& cert_id)
     {
         return false;
     }

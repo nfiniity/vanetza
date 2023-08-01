@@ -30,8 +30,8 @@ struct EctlPaths {
     std::string tlm_cert;
     // ECTL cache (base_path/ctl/ectl.oer)
     std::string ectl;
-    // RCA CRLs cache directory (base_path/crl/)
-    std::string crl;
+    // RCA cache directory (base_path/rca/)
+    std::string rca;
     // Registration key directory (base_path/reg/)
     std::string reg;
     // Registration key (base_path/reg/reg_key.der)
@@ -49,12 +49,10 @@ struct EctlPaths {
     std::string at_cert(uint8_t index) const;
     // Authorization ticket key (base_path/at/{index}/at_key.der)
     std::string at_key(uint8_t index) const;
-};
-
-struct RcaMetadata
-{
-    std::string dc_url;
-    std::set<security::HashedId8> revoked_ids;
+    // RCA CTL (base_path/rca/{rca_id}/ctl.oer)
+    std::string rca_ctl(const std::string &rca_id) const;
+    // RCA CRL (base_path/rca/{rca_id}/crl.oer)
+    std::string rca_crl(const std::string &rca_id) const;
 };
 
 enum class SubCaType
@@ -71,6 +69,17 @@ struct SubCertificateV3
     boost::optional<std::string> access_point_url;
     // Type of sub CA
     SubCaType type;
+};
+
+struct RcaMetadata
+{
+    std::string dc_url;
+
+    boost::optional<std::map<security::HashedId8, SubCertificateV3>> subcerts;
+    Clock::time_point next_ctl_update;
+
+    boost::optional<std::set<security::HashedId8>> revoked_subcerts;
+    Clock::time_point next_crl_update;
 };
 
 static const std::string L0_CPOC_URL = "https://cpoc.jrc.ec.europa.eu/L0/";
@@ -105,19 +114,19 @@ public:
     /*
      * Check if a subcertificate is revoked
      * \param rca_id issuer ID of subcertificate
-     * \param cert_id certificate ID of subcertificate
+     * \param subcert_id certificate ID of subcertificate
      */
     bool is_revoked(const security::HashedId8 &rca_id,
-                    const security::HashedId8 &cert_id) const override;
+                    const security::HashedId8 &subcert_id) override;
 
     /*
      * Request a subcertificate from a RCA directly
      * \param rca_id issuer ID of subcertificate
-     * \param cert_id certificate ID of subcertificate
+     * \param subcert_id certificate ID of subcertificate
      */
     boost::optional<SubCertificateV3>
     get_subcert(const security::HashedId8 &rca_id,
-                const security::HashedId8 &cert_id);
+                const security::HashedId8 &subcert_id);
 
   private:
     /*
@@ -125,9 +134,9 @@ public:
      * \return true if TLM certificate was loaded or updated
      */
     bool refresh_tlm_cert();
-    void refresh_ectl();
     void set_next_tlm_cert_update();
 
+    void refresh_ectl();
     bool load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const security::Sha384Digest &buffer_hash);
     boost::optional<asn1::ToBeSignedTlmCtl> parse_ectl(const ByteBuffer &buffer) const;
     Clock::time_point calc_next_ectl_update(const asn1::ToBeSignedTlmCtl &ectl) const;
@@ -135,10 +144,10 @@ public:
         const boost::optional<asn1::ToBeSignedTlmCtl> &cached_ectl,
         const boost::optional<security::Sha384Digest> &buffer_hash);
 
+    void refresh_rca_ctl(const security::HashedId8 &id, RcaMetadata &metadata);
     boost::optional<asn1::ToBeSignedRcaCtl>
     parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id);
-    boost::optional<SubCertificateV3>
-    find_subcert(const asn1::ToBeSignedRcaCtl &rca_ctl, const security::HashedId8 &cert_id) const;
+    bool load_rca_ctl(const asn1::ToBeSignedRcaCtl &rca_ctl, RcaMetadata &metadata) const;
 
     const EctlPaths &paths;
     const Runtime &runtime;
