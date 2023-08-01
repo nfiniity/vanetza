@@ -58,35 +58,34 @@ const security::CertificateVariant& EnrolmentCertificateProvider::own_certificat
 
 bool EnrolmentCertificateProvider::refresh_enrolment_certificate()
 {
-    // Check if certificate is loaded.
-    if (!enrolment_certificate) {
-        // If not, check if it can be loaded from file.
-        if (boost::filesystem::exists(ectl_paths.ec_cert)) {
-            std::cout << "Loading enrolment certificate from file" << std::endl;
-            enrolment_certificate = security::load_certificate_from_file_v3(ectl_paths.ec_cert);
+    // Load EC from file if it not in memory
+    if (!enrolment_certificate && boost::filesystem::exists(ectl_paths.ec_cert)) {
+        std::cout << "Loading enrolment certificate from file" << std::endl;
 
-            enrolment_certificate_key =
-                security::openssl::EvpKey::read_key(ectl_paths.ec_key).private_key();
+        enrolment_certificate = security::load_certificate_from_file_v3(ectl_paths.ec_cert);
+        enrolment_certificate_key =
+            security::openssl::EvpKey::read_key(ectl_paths.ec_key).private_key();
 
-            set_next_update();
-        } else {
-            // If not, try to enrol with registration credentials.
-            std::cout << "Enrolment certificate not found, trying to enrol with registration credentials" << std::endl;
-
-            if (!initial_enrol()) {
-                throw std::runtime_error("Initial enrolment failed");
-            }
-
-            return true;
-        }
+        set_next_update();
     }
 
     if (runtime.now() < next_update) {
         return false;
     }
 
-    std::cout << "Starting re-enrolment" << std::endl;
-    return re_enrol();
+    // EC close to expiry, try re-enrolment
+    if (enrolment_certificate && runtime.now() < get_validity_end()) {
+        std::cout << "Starting re-enrolment" << std::endl;
+        return re_enrol();
+    }
+
+    // No EC found or expired, try initial enrolment
+    std::cout << "Enrolment certificate not found, trying to enrol with registration credentials" << std::endl;
+    if (!initial_enrol()) {
+        throw std::runtime_error("Initial enrolment failed");
+    }
+
+    return true;
 }
 
 bool EnrolmentCertificateProvider::initial_enrol()
@@ -194,16 +193,21 @@ boost::optional<security::CertificateV3> EnrolmentCertificateProvider::run_enrol
                               ea_certificate.certificate, backend, runtime);
 }
 
-void EnrolmentCertificateProvider::set_next_update()
+Clock::time_point EnrolmentCertificateProvider::get_validity_end()
 {
     if (!enrolment_certificate) {
-        return;
+        return Clock::time_point();
     }
+
     const security::CertificateV3 &certificate = boost::get<security::CertificateV3>(*enrolment_certificate);
     const security::StartAndEndValidity start_and_end = certificate.get_start_and_end_validity();
-    const auto validity_end = security::convert_time_point(start_and_end.end_validity);
+    return security::convert_time_point(start_and_end.end_validity);
+}
+
+void EnrolmentCertificateProvider::set_next_update()
+{
     // 3 Months before end of validity
-    next_update = validity_end - std::chrono::hours(24 * 30 * 3);
+    next_update = get_validity_end() - std::chrono::hours(24 * 30 * 3);
 }
 
 void EnrolmentCertificateProvider::set_new_enrolment_certificate(

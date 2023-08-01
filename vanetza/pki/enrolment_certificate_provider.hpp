@@ -66,6 +66,8 @@ private:
     boost::optional<security::CertificateV3>
     run_enrolment_request(const security::EncryptConfirm &request);
 
+    Clock::time_point get_validity_end();
+
     SubCertificateV3 ea_certificate;
     security::BackendOpenSsl& backend;
     const Runtime &runtime;
