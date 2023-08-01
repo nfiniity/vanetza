@@ -33,11 +33,11 @@ private:
 
     pki::CurlWrapper curl;
     pki::EctlPaths paths;
+    security::CertificateCache cert_cache;
     pki::EctlTrustStore trust_store;
     pki::EnrolmentCertificateProvider ec_provider;
     pki::AuthorizationTicketProvider at_provider;
     security::DefaultSignHeaderPolicy sign_header_policy;
-    security::CertificateCache cert_cache;
     security::DefaultCertificateValidator cert_validator;
     security::DelegatingSecurityEntity delegating_entity;
 

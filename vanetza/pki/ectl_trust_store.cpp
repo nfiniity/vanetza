@@ -73,10 +73,11 @@ std::string EctlPaths::rca_crl(const std::string &rca_id) const
 }
 
 EctlTrustStore::EctlTrustStore(const EctlPaths &paths, const Runtime &runtime,
-                               CurlWrapper &curl,
-                               security::Backend &backend,
+                               CurlWrapper &curl, security::Backend &backend,
+                               security::CertificateCache &cert_cache,
                                const std::string &cpoc_url)
-    : paths(paths), runtime(runtime), curl(curl), backend(backend), cpoc_url(cpoc_url)
+    : paths(paths), runtime(runtime), curl(curl), backend(backend),
+      cert_cache(cert_cache), cpoc_url(cpoc_url)
 {
     // Load TLM certificate and ECTL
     refresh_ectl();
@@ -290,7 +291,7 @@ void EctlTrustStore::recover_failed_ectl_update(
 }
 
 boost::optional<asn1::ToBeSignedTlmCtl>
-EctlTrustStore::parse_ectl(const ByteBuffer &ectl_buffer) const
+EctlTrustStore::parse_ectl(const ByteBuffer &ectl_buffer)
 {
     // Put tlm_cert into verification trust store
     if (!tlm_cert) {
@@ -318,14 +319,22 @@ EctlTrustStore::parse_ectl(const ByteBuffer &ectl_buffer) const
     return ectl;
 }
 
+boost::optional<asn1::EtsiTs102941Data>
+EctlTrustStore::parse_rca_etsi_ts_102_941_data(const ByteBuffer &buffer, const security::HashedId8 &rca_id)
+{
+    // Put expected signer certificate into cache
+    const auto &expected_cert = m_certificates.find(rca_id)->second;
+    cert_cache.insert(expected_cert);
+
+    // RCA cert should be in trust store, so we can use it for verification
+    security::DefaultCertificateValidator rca_cert_validator(backend, boost::none, *this);
+    return parse_etsi_ts_102_941_data(buffer, rca_id, rca_cert_validator);
+}
+
 boost::optional<asn1::ToBeSignedRcaCtl>
 EctlTrustStore::parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id)
 {
-    // RCA cert should be in trust store, so we can use it for verification
-    security::DefaultCertificateValidator rca_cert_validator(backend, boost::none, *this);
-
-    auto etsi_ts_102_941_data =
-        parse_etsi_ts_102_941_data(buffer, rca_id, rca_cert_validator);
+    auto etsi_ts_102_941_data = parse_rca_etsi_ts_102_941_data(buffer, rca_id);
     if (!etsi_ts_102_941_data) {
         return boost::none;
     }
@@ -339,6 +348,25 @@ EctlTrustStore::parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId
     asn1::ToBeSignedRcaCtl rca_ctl;
     std::swap(*rca_ctl, content.choice.certificateTrustListRca);
     return rca_ctl;
+}
+
+boost::optional<asn1::ToBeSignedCrl>
+EctlTrustStore::parse_rca_crl(const ByteBuffer &buffer, const security::HashedId8 &rca_id)
+{
+    auto etsi_ts_102_941_data = parse_rca_etsi_ts_102_941_data(buffer, rca_id);
+    if (!etsi_ts_102_941_data) {
+        return boost::none;
+    }
+
+    auto &content = etsi_ts_102_941_data.get()->content;
+    if (content.present != EtsiTs102941DataContent_PR_certificateRevocationList) {
+        std::cerr << "RCA CRL message does not contain a RCA CRL" << std::endl;
+        return boost::none;
+    }
+
+    asn1::ToBeSignedCrl rca_crl;
+    std::swap(*rca_crl, content.choice.certificateRevocationList);
+    return rca_crl;
 }
 
 bool EctlTrustStore::load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const security::Sha384Digest &buffer_hash)
@@ -397,17 +425,21 @@ bool EctlTrustStore::load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const securit
 bool EctlTrustStore::is_revoked(const security::HashedId8 &rca_id,
                                 const security::HashedId8 &subcert_id)
 {
-    // TODO: download and parse CRLs
-    const auto &rca_metadata = rca_metadata_map.find(rca_id);
-    if (rca_metadata == rca_metadata_map.end()) {
+    // Check if RCA is in trust store
+    const auto &rca_metadata_find = rca_metadata_map.find(rca_id);
+    if (rca_metadata_find == rca_metadata_map.end()) {
         return false;
     }
+    RcaMetadata &rca_metadata = rca_metadata_find->second;
 
-    const auto &revoked_subcerts = rca_metadata->second.revoked_subcerts;
+    // Refresh RCA CRL if needed
+    refresh_rca_crl(rca_id, rca_metadata);
+
+    // Check if subcert is revoked
+    const auto &revoked_subcerts = rca_metadata.revoked_subcerts;
     if (!revoked_subcerts) {
         return false;
     }
-
     return revoked_subcerts->find(subcert_id) != revoked_subcerts->end();
 }
 
@@ -537,6 +569,97 @@ bool EctlTrustStore::load_rca_ctl(const asn1::ToBeSignedRcaCtl &rca_ctl, RcaMeta
     return true;
 }
 
+void EctlTrustStore::refresh_rca_crl(const security::HashedId8 &rca_id, RcaMetadata &metadata)
+{
+    std::string rca_id_hex;
+    boost::algorithm::hex(rca_id, std::back_inserter(rca_id_hex));
+
+    // Check if update is needed
+    if (metadata.next_crl_update > runtime.now()) {
+        return;
+    }
+
+    const auto &dc_url = metadata.dc_url;
+    if (dc_url.empty()) {
+        std::cerr << "DC URL for RCA " << rca_id_hex << " is empty" << std::endl;
+        return;
+    }
+
+    // Try to load from cache if list is not initialized
+    std::string rca_crl_path = paths.rca_crl(rca_id_hex);
+    if (!metadata.subcerts && boost::filesystem::exists(rca_crl_path)) {
+        std::ifstream rca_crl_file(rca_crl_path, std::ios::in | std::ios::binary);
+        ByteBuffer cached_rca_crl_bb(std::istreambuf_iterator<char>(rca_crl_file), {});
+        asn1::ToBeSignedCrl cached_rca_crl;
+        cached_rca_crl.decode(cached_rca_crl_bb);
+
+        if (load_rca_crl(cached_rca_crl, metadata) && metadata.next_crl_update > runtime.now()) {
+            return;
+        }
+    }
+
+    // Download RCA CRL
+    std::string cert_url = dc_url + "getcrl/" + rca_id_hex;
+    std::cout << "Downloading RCA CRL from " << cert_url << std::endl;
+    boost::optional<ByteBuffer> rca_crl_msg_bb = curl.get_data(cert_url);
+    if (!rca_crl_msg_bb) {
+        std::cerr << "Failed to get RCA CRL from " << cert_url << std::endl;
+        metadata.next_crl_update = runtime.now() + std::chrono::minutes(5);
+        return;
+    }
+
+    // Parse RCA CRL
+    boost::optional<asn1::ToBeSignedCrl> rca_crl = parse_rca_crl(*rca_crl_msg_bb, rca_id);
+    if (!rca_crl) {
+        std::cerr << "Failed to parse RCA CRL" << std::endl;
+        metadata.next_crl_update = runtime.now() + std::chrono::minutes(5);
+        return;
+    }
+
+    // Load RCA CRL
+    if (!load_rca_crl(*rca_crl, metadata)) {
+        std::cerr << "Failed to load RCA CRL" << std::endl;
+        metadata.next_crl_update = runtime.now() + std::chrono::minutes(5);
+        return;
+    }
+
+    // Save RCA CRL to cache
+    auto rca_crl_bb = rca_crl->encode();
+    std::ofstream rca_crl_file(rca_crl_path, std::ios::out | std::ios::binary);
+    rca_crl_file.write(reinterpret_cast<const char *>(rca_crl_bb.data()), rca_crl_bb.size());
+    rca_crl_file.close();
+    std::cout << "Saved RCA CRL to " << paths.rca_crl(rca_id_hex) << std::endl;
+}
+
+bool EctlTrustStore::load_rca_crl(const asn1::ToBeSignedCrl &rca_crl, RcaMetadata &metadata) const
+{
+    // Check version
+    if (rca_crl->version != Version_v1) {
+        std::cerr << "RCA CRL has unsupported version " << rca_crl->version << std::endl;
+        return false;
+    }
+
+    // Reset old revocation list
+    metadata.revoked_subcerts = std::set<security::HashedId8>();
+    auto &revoked_subcerts = *metadata.revoked_subcerts;
+
+    const auto &rca_crl_entries = rca_crl->entries.list;
+    for (int i = 0; i < rca_crl_entries.count; ++i) {
+        const auto &rca_crl_entry = *rca_crl_entries.array[i];
+        revoked_subcerts.insert(asn1::HashedId8_asn_to_HashedId8(rca_crl_entry));
+    }
+
+    // Set next update to 1 month before nextUpdate
+    const auto validity_end = security::convert_time_point(security::Time32(rca_crl->nextUpdate));
+    metadata.next_crl_update = validity_end - std::chrono::hours(24 * 30);
+    if (metadata.next_crl_update < runtime.now()) {
+        // If next update is in the past, set it to 24 hours from now or validity end, whichever is earlier
+        metadata.next_crl_update = std::min(runtime.now() + std::chrono::hours(24), validity_end);
+    }
+
+    return true;
+}
+
 boost::optional<SubCertificateV3>
 EctlTrustStore::get_subcert(const security::HashedId8 &rca_id,
                             const security::HashedId8 &subcert_id)
@@ -553,6 +676,7 @@ EctlTrustStore::get_subcert(const security::HashedId8 &rca_id,
         return boost::none;
     }
 
+    // Check if RCA is in trust store
     const auto &rca_metadata_find = rca_metadata_map.find(rca_id);
     if (rca_metadata_find == rca_metadata_map.end()) {
         std::cerr << "RCA " << rca_id_hex << " is not in trust store" << std::endl;
@@ -579,14 +703,14 @@ EctlTrustStore::get_subcert(const security::HashedId8 &rca_id,
 boost::optional<asn1::EtsiTs102941Data>
 EctlTrustStore::parse_etsi_ts_102_941_data(const ByteBuffer &message_buffer,
                                            const security::HashedId8 &expected_signer_id,
-                                           security::CertificateValidator &cert_validator) const
+                                           security::CertificateValidator &cert_validator)
 {
     // Validate signature
     security::SecuredMessageVariant sec_packet = security::SecuredMessageV3(message_buffer);
     security::VerifyRequest verify_request(sec_packet);
     auto verify_res =
         security::verify_v3(verify_request, runtime, boost::none, cert_validator,
-                            backend, boost::none, boost::none, boost::none);
+                            backend, cert_cache, boost::none, boost::none);
     if (verify_res.report != security::VerificationReport::Success) {
         std::cerr << "Failed to verify signature" << std::endl;
         return boost::none;

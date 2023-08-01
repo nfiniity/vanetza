@@ -78,17 +78,18 @@ EctlSecurityEntity::EctlSecurityEntity(
     security::IdChangeCallback &&access_id_change_callback,
     const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list,
     const boost::optional<std::string> &canonical_id)
-    : curl(runtime), paths(trust_store_path), trust_store(paths, runtime, curl, backend),
-        ec_provider(build_ec_provider(trust_store, paths, backend, runtime,
+    : curl(runtime), paths(trust_store_path), cert_cache(runtime),
+      trust_store(paths, runtime, curl, backend, cert_cache),
+      ec_provider(build_ec_provider(trust_store, paths, backend, runtime,
                                     curl, rca_id, ea_id, psid_ssp_list,
                                     canonical_id)),
-        at_provider(build_at_provider(trust_store, paths, backend, runtime,
+      at_provider(build_at_provider(trust_store, paths, backend, runtime,
                                     curl, ec_provider, rca_id, ea_id, aa_id,
                                     num_authorization_tickets, psid_ssp_list)),
-        sign_header_policy(runtime, positioning), cert_cache(runtime),
-        cert_validator(backend, cert_cache, trust_store),
-        delegating_entity(build_delegating_entity(runtime, backend, at_provider, cert_validator,
-                          cert_cache, sign_header_policy, positioning))
+      sign_header_policy(runtime, positioning),
+      cert_validator(backend, cert_cache, trust_store),
+      delegating_entity(build_delegating_entity(runtime, backend, at_provider, cert_validator,
+                        cert_cache, sign_header_policy, positioning))
 {
     register_id_change_callback(std::move(access_id_change_callback));
 }

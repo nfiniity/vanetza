@@ -6,8 +6,10 @@
 #include <vanetza/security/sha.hpp>
 #include <vanetza/security/security_entity.hpp>
 #include <vanetza/security/default_certificate_validator.hpp>
+#include <vanetza/security/certificate_cache.hpp>
 #include <vanetza/common/runtime.hpp>
 #include <vanetza/asn1/ctl.hpp>
+#include <vanetza/asn1/crl.hpp>
 #include <vanetza/asn1/etsi_ts_102_941_data.hpp>
 #include <set>
 #include <map>
@@ -95,12 +97,14 @@ public:
      * \param runtime Runtime instance
      * \param curl Curl Wrapper
      * \param backend Security backend
+     * \param cert_cache Certificate cache
      * \param cpoc_url URL of CPOC server (with trailing slash)
      */
     EctlTrustStore(const EctlPaths &paths,
                    const Runtime &runtime,
                    CurlWrapper& curl,
                    security::Backend &backend,
+                   security::CertificateCache &cert_cache,
                    const std::string &cpoc_url = L0_CPOC_URL);
     ~EctlTrustStore() override = default;
 
@@ -140,7 +144,7 @@ public:
 
     void refresh_ectl();
     bool load_ectl(const asn1::ToBeSignedTlmCtl &ectl, const security::Sha384Digest &buffer_hash);
-    boost::optional<asn1::ToBeSignedTlmCtl> parse_ectl(const ByteBuffer &buffer) const;
+    boost::optional<asn1::ToBeSignedTlmCtl> parse_ectl(const ByteBuffer &buffer);
     Clock::time_point calc_next_ectl_update(const asn1::ToBeSignedTlmCtl &ectl) const;
     void recover_failed_ectl_update(
         const boost::optional<asn1::ToBeSignedTlmCtl> &cached_ectl,
@@ -151,15 +155,25 @@ public:
     parse_rca_ctl(const ByteBuffer &buffer, const security::HashedId8 &rca_id);
     bool load_rca_ctl(const asn1::ToBeSignedRcaCtl &rca_ctl, RcaMetadata &metadata) const;
 
+    void refresh_rca_crl(const security::HashedId8 &id, RcaMetadata &metadata);
+    boost::optional<asn1::ToBeSignedCrl>
+    parse_rca_crl(const ByteBuffer &buffer, const security::HashedId8 &rca_id);
+    bool load_rca_crl(const asn1::ToBeSignedCrl &rca_crl, RcaMetadata &metadata) const;
+
+    boost::optional<asn1::EtsiTs102941Data>
+    parse_rca_etsi_ts_102_941_data(const ByteBuffer &buffer,
+                                   const security::HashedId8 &rca_id);
+
     boost::optional<asn1::EtsiTs102941Data> parse_etsi_ts_102_941_data(
         const ByteBuffer &message_buffer,
         const security::HashedId8 &expected_signer_id,
-        security::CertificateValidator &cert_validator) const;
+        security::CertificateValidator &cert_validator);
 
     const EctlPaths &paths;
     const Runtime &runtime;
     CurlWrapper& curl;
     security::Backend &backend;
+    security::CertificateCache &cert_cache;
     std::string cpoc_url;
 
     boost::optional<security::CertificateV3> tlm_cert;
