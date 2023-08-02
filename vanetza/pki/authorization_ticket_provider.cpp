@@ -58,8 +58,7 @@ const security::ecdsa256::PrivateKey& AuthorizationTicketProvider::own_private_k
 
 std::list<security::CertificateVariant> AuthorizationTicketProvider::own_chain()
 {
-    // TODO: check this
-    return {own_certificate(), aa_certificate.certificate};
+    return {aa_certificate.certificate};
 }
 
 const security::CertificateVariant& AuthorizationTicketProvider::own_certificate()
