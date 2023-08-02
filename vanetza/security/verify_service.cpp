@@ -396,17 +396,29 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
             confirm.report = VerificationReport::Incompatible_Protocol;
             return confirm;
         }
+
         std::list<HashedId3> requested_certs = secured_message.get_inline_p2pcd_Request();
-        if (requested_certs.size() > 0) {
-            for (auto& requested_cert : requested_certs) {
-                if (truncate(boost::get<CertificateV3>(cert_provider->own_certificate()).calculate_hash()) == requested_cert) {
+        if (!requested_certs.empty()) {
+            // Calculate IDs of own certificates and certificate chain
+            auto own_cert_id = truncate(
+                boost::get<CertificateV3>(cert_provider->own_certificate()).calculate_hash());
+            auto own_chain = cert_provider->own_chain();
+            std::vector<HashedId3> own_chain_ids(own_chain.size());
+            std::transform(own_chain.begin(), own_chain.end(), own_chain_ids.begin(),
+                           [](const CertificateVariant& cert) {
+                               return truncate(boost::get<CertificateV3>(cert).calculate_hash());
+                           });
+
+            // Check if any of the requested certificates are available
+            for (const auto& requested_cert : requested_certs) {
+                if (own_cert_id == requested_cert) {
                     sign_policy->request_certificate();
+                    continue;
                 }
 
-                for (auto& cert : cert_provider->own_chain()) {
-                    if (truncate(boost::get<CertificateV3>(cert).calculate_hash()) == requested_cert) {
-                        sign_policy->request_certificate_chain();
-                    }
+                const auto it = std::find(own_chain_ids.begin(), own_chain_ids.end(), requested_cert);
+                if (it != own_chain_ids.end()) {
+                    sign_policy->request_certificate_chain();
                 }
             }
         }
