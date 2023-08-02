@@ -16,7 +16,7 @@ AuthorizationTicketProvider::AuthorizationTicketProvider(
     const SubCertificateV3 &ea_certificate,
     const SubCertificateV3 &aa_certificate,
     security::BackendOpenSsl &backend,
-    const Runtime &runtime,
+    Runtime &runtime,
     CurlWrapper &curl,
     const EctlPaths &ectl_paths,
     const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
@@ -41,7 +41,8 @@ AuthorizationTicketProvider::AuthorizationTicketProvider(
         throw std::invalid_argument("AuthorizationTicketProvider: AA certificate must have access point URL");
     }
 
-    // Don't refresh here, callbacks for ID change in Router are not set up yet
+    // Schedule first switch
+    reset_switch_timer(Clock::time_point());
 }
 
 int AuthorizationTicketProvider::version()
@@ -51,28 +52,30 @@ int AuthorizationTicketProvider::version()
 
 const security::ecdsa256::PrivateKey& AuthorizationTicketProvider::own_private_key()
 {
-    refresh_authorization_ticket();
     return *authorization_ticket_key;
 }
 
 std::list<security::CertificateVariant> AuthorizationTicketProvider::own_chain()
 {
     // TODO: check this
-    return {aa_certificate.certificate};
+    return {own_certificate(), aa_certificate.certificate};
 }
 
 const security::CertificateVariant& AuthorizationTicketProvider::own_certificate()
 {
-    refresh_authorization_ticket();
     return *authorization_ticket;
+}
+
+void AuthorizationTicketProvider::reset_switch_timer(const Clock::time_point &next_switch)
+{
+    runtime.cancel(this);
+    runtime.schedule(next_switch, [this](Clock::time_point) {
+        refresh_authorization_ticket();
+    }, this);
 }
 
 bool AuthorizationTicketProvider::refresh_authorization_ticket()
 {
-    if (runtime.now() < next_switch) {
-        return false;
-    }
-
     // Get a random new index
     uint8_t new_index = get_next_index();
     // Potentially for expired AT, used for error recovery
@@ -129,7 +132,7 @@ bool AuthorizationTicketProvider::refresh_authorization_ticket()
     current_index = new_index;
 
     // Try again in 5 minutes
-    next_switch = runtime.now() + std::chrono::minutes(5);
+    reset_switch_timer(runtime.now() + std::chrono::minutes(5));
     return true;
 }
 
@@ -185,7 +188,7 @@ void AuthorizationTicketProvider::set_next_switch()
 
     // TODO: Timeout conditions
     auto timeout = runtime.now() + std::chrono::minutes(5);
-    next_switch = std::min(timeout, validity_end);
+    reset_switch_timer(std::min(timeout, validity_end));
 }
 
 uint8_t AuthorizationTicketProvider::get_next_index() const

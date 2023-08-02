@@ -33,7 +33,7 @@ public:
                                          const SubCertificateV3& ea_certificate,
                                          const SubCertificateV3& aa_certificate,
                                          security::BackendOpenSsl& backend,
-                                         const Runtime &runtime,
+                                         Runtime &runtime,
                                          CurlWrapper& curl,
                                          const EctlPaths& ectl_paths,
                                          const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
@@ -59,6 +59,8 @@ public:
     const security::ecdsa256::PrivateKey& own_private_key() override;
 
 private:
+    void reset_switch_timer(const Clock::time_point &next_switch);
+
     bool refresh_authorization_ticket();
     void set_authorization_ticket(
         uint8_t index, const security::CertificateV3 &certificate,
@@ -80,7 +82,7 @@ private:
     SubCertificateV3 ea_certificate;
     SubCertificateV3 aa_certificate;
     security::BackendOpenSsl& backend;
-    const Runtime &runtime;
+    Runtime &runtime;
     CurlWrapper& curl;
     const EctlPaths& ectl_paths;
     boost::optional<asn1::SequenceOfPsidSsp> psid_ssp_list;
@@ -88,7 +90,6 @@ private:
 
     boost::optional<security::CertificateVariant> authorization_ticket;
     boost::optional<security::ecdsa256::PrivateKey> authorization_ticket_key;
-    Clock::time_point next_switch;
     uint8_t current_index = 255;
 };
 

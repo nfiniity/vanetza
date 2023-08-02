@@ -45,7 +45,7 @@ pki::AuthorizationTicketProvider
 build_at_provider(pki::EctlTrustStore &trust_store,
                   const pki::EctlPaths &paths,
                   security::BackendOpenSsl &backend,
-                  const Runtime &runtime,
+                  Runtime &runtime,
                   pki::CurlWrapper &curl,
                   security::CertificateProvider &ec_provider,
                   const security::HashedId8 &rca_id,
@@ -68,7 +68,7 @@ build_at_provider(pki::EctlTrustStore &trust_store,
 }
 
 EctlSecurityEntity::EctlSecurityEntity(
-    const Runtime &runtime,
+    Runtime &runtime,
     PositionProvider &positioning,
     const std::string &trust_store_path,
     const security::HashedId8 &rca_id,

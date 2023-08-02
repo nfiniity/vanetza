@@ -61,7 +61,7 @@ public:
      * \param canonical_id canonical id (optional)
      */
     EctlSecurityEntity(
-        const Runtime &runtime,
+        Runtime &runtime,
         PositionProvider &positioning,
         const std::string &trust_store_path,
         const security::HashedId8 &rca_id,
