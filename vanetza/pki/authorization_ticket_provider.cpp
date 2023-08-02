@@ -19,11 +19,12 @@ AuthorizationTicketProvider::AuthorizationTicketProvider(
     Runtime &runtime,
     CurlWrapper &curl,
     const EctlPaths &ectl_paths,
+    const security::SecurityEntity &security_entity,
     const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
     : num_authorization_tickets(num_authorization_tickets), ec_provider(ec_provider),
       ea_certificate(ea_certificate), aa_certificate(aa_certificate),
-      backend(backend), runtime(runtime), curl(curl),
-      ectl_paths(ectl_paths), psid_ssp_list(psid_ssp_list)
+      backend(backend), runtime(runtime), curl(curl), ectl_paths(ectl_paths),
+      security_entity(security_entity), psid_ssp_list(psid_ssp_list)
 {
     // EA certificate checks
     if (ea_certificate.type != SubCaType::EA) {
@@ -72,6 +73,12 @@ void AuthorizationTicketProvider::reset_switch_timer(const Clock::time_point &ne
     runtime.schedule(next_switch, [this](Clock::time_point) {
         refresh_authorization_ticket();
     }, this);
+}
+
+void AuthorizationTicketProvider::change_id()
+{
+    const security::CertificateV3 &at_ref = boost::get<security::CertificateV3>(*authorization_ticket);
+    security_entity.change_id(at_ref.calculate_hash());
 }
 
 bool AuthorizationTicketProvider::refresh_authorization_ticket()
@@ -130,6 +137,8 @@ bool AuthorizationTicketProvider::refresh_authorization_ticket()
     authorization_ticket = stored_at;
     authorization_ticket_key = stored_at_key->private_key();
     current_index = new_index;
+    // Trigger security entity ID change
+    change_id();
 
     // Try again in 5 minutes
     reset_switch_timer(runtime.now() + std::chrono::minutes(5));
@@ -213,6 +222,9 @@ void AuthorizationTicketProvider::set_authorization_ticket(
     authorization_ticket = certificate;
     authorization_ticket_key = private_key.private_key();
     current_index = index;
+
+    // Trigger security entity ID change and reset switch timer
+    change_id();
     set_next_switch();
 }
 

@@ -26,6 +26,7 @@ public:
      * \param runtime used for signatures
      * \param curl used for HTTP requests
      * \param ectl_paths paths for AT storage
+     * \param security_entity security entity for ID change
      * \param psid_ssp_list list of PSID/SSP pairs
      */
     explicit AuthorizationTicketProvider(uint8_t num_authorization_tickets,
@@ -36,6 +37,7 @@ public:
                                          Runtime &runtime,
                                          CurlWrapper& curl,
                                          const EctlPaths& ectl_paths,
+                                         const security::SecurityEntity &security_entity,
                                          const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list);
 
 
@@ -60,6 +62,7 @@ public:
 
 private:
     void reset_switch_timer(const Clock::time_point &next_switch);
+    void change_id();
 
     bool refresh_authorization_ticket();
     void set_authorization_ticket(
@@ -85,8 +88,8 @@ private:
     Runtime &runtime;
     CurlWrapper& curl;
     const EctlPaths& ectl_paths;
+    const security::SecurityEntity &security_entity;
     boost::optional<asn1::SequenceOfPsidSsp> psid_ssp_list;
-    boost::optional<std::string> canonical_id;
 
     boost::optional<security::CertificateVariant> authorization_ticket;
     boost::optional<security::ecdsa256::PrivateKey> authorization_ticket_key;

@@ -52,6 +52,7 @@ build_at_provider(pki::EctlTrustStore &trust_store,
                   const security::HashedId8 &ea_id,
                   const security::HashedId8 &aa_id,
                   uint8_t num_authorization_tickets,
+                  const security::SecurityEntity &security_entity,
                   const boost::optional<asn1::SequenceOfPsidSsp> &psid_ssp_list)
 {
     auto ea_res = trust_store.get_subcert(rca_id, ea_id);
@@ -64,7 +65,7 @@ build_at_provider(pki::EctlTrustStore &trust_store,
 
     return pki::AuthorizationTicketProvider(
         num_authorization_tickets, ec_provider, *ea_res, *aa_res,
-        backend, runtime, curl, paths, psid_ssp_list);
+        backend, runtime, curl, paths, security_entity, psid_ssp_list);
 }
 
 EctlSecurityEntity::EctlSecurityEntity(
@@ -85,7 +86,7 @@ EctlSecurityEntity::EctlSecurityEntity(
                                     canonical_id)),
       at_provider(build_at_provider(trust_store, paths, backend, runtime,
                                     curl, ec_provider, rca_id, ea_id, aa_id,
-                                    num_authorization_tickets, psid_ssp_list)),
+                                    num_authorization_tickets, *this, psid_ssp_list)),
       sign_header_policy(runtime, positioning),
       cert_validator(backend, cert_cache, trust_store),
       delegating_entity(build_delegating_entity(runtime, backend, at_provider, cert_validator,
