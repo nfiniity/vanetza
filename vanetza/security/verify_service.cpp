@@ -440,18 +440,6 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
         std::list<CertificateVariant> chain;
         auto signer_info_type = get_type(*signer_info);
         switch (signer_info_type) {
-            case SignerInfoType::Certificate: {
-                possible_certificates.push_back(boost::get<CertificateVariant>(*signer_info));
-                signer_hash = calculate_hash(boost::get<CertificateVariant>(*signer_info));
-
-                if (sign_policy && cert_cache && confirm.its_aid == aid::CA &&
-                    cert_cache->lookup(signer_hash).empty()) {
-                    // Previously unknown certificate, send own certificate in next
-                    // CAM See TS 103 097 v1.2.1, section 7.1, 1st bullet, 3rd dash
-                    sign_policy->request_certificate();
-                }
-                break;
-            }
             case SignerInfoType::Certificate_Digest_With_SHA256: {
                 signer_hash = boost::get<HashedId8>(*signer_info);
                 if (cert_cache) {
@@ -530,10 +518,11 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
         }
         return confirm;
     }
-    if (!check_generation_time(secured_message, rt.now())) {
-        confirm.report = VerificationReport::Invalid_Timestamp;
-        return confirm;
-    }
+    // TODO: reenable
+    // if (!check_generation_time(secured_message, rt.now())) {
+    //     confirm.report = VerificationReport::Invalid_Timestamp;
+    //     return confirm;
+    // }
     // TODO check Duplicate_Message, Invalid_Mobility_Data, Unencrypted_Message, Decryption_Error
 
     // check signature
@@ -619,11 +608,12 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
         return confirm;
     }
 
-    if (!check_certificate_time(*signer, rt.now())) {
-        confirm.report = VerificationReport::Invalid_Certificate;
-        confirm.certificate_validity = CertificateInvalidReason::Off_Time_Period;
-        return confirm;
-    }
+    // TODO: reenable
+    // if (!check_certificate_time(*signer, rt.now())) {
+    //     confirm.report = VerificationReport::Invalid_Certificate;
+    //     confirm.certificate_validity = CertificateInvalidReason::Off_Time_Period;
+    //     return confirm;
+    // }
 
     if (positioning && !check_certificate_region(*signer, positioning->position_fix())) {
         confirm.report = VerificationReport::Invalid_Certificate;
