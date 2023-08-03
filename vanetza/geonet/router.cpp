@@ -1213,6 +1213,7 @@ void Router::detect_duplicate_address(const Address& source, const MacAddress& s
             }
 
             m_local_position_vector.gn_addr.mid(random_mac_addr);
+            m_mib.itsGnLocalGnAddr.mid(random_mac_addr);
         }
     }
 }
