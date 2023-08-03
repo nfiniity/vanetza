@@ -207,7 +207,7 @@ class SecuredMessageV3{
          * \brief Setter of the request of unknown certificates
          * \param requests List of requested certificates
          */
-        void set_inline_p2pcd_request(std::list<HashedId3> requests);
+        void set_inline_p2pcd_request(const std::list<HashedId3> &requests);
         /**
          * \brief Setter of the Location of the message
          * \param location ThreeDLocation

@@ -443,22 +443,21 @@ void SecuredMessageV3::set_certificate_digest(HashedId8 digest){
         );
 }
 
-void SecuredMessageV3::set_inline_p2pcd_request(std::list<HashedId3> requests){
-    ASN_STRUCT_FREE_CONTENTS_ONLY(
-        asn_DEF_SequenceOfHashedId3,
-        &(this->message->content->choice.signedData->tbsData->headerInfo.inlineP2pcdRequest)
-    );
+void SecuredMessageV3::set_inline_p2pcd_request(const std::list<HashedId3> &requests)
+{
+    SequenceOfHashedId3_t *&inline_p2pcd_request =
+        this->message->content->choice.signedData->tbsData->headerInfo .inlineP2pcdRequest;
+    if (inline_p2pcd_request) {
+        asn_sequence_empty(&(inline_p2pcd_request->list));
+    } else {
+        inline_p2pcd_request = vanetza::asn1::allocate<SequenceOfHashedId3_t>();
+    }
+
     for (HashedId3 request : requests){
-        HashedId3_t* temp = static_cast<HashedId3_t*>(vanetza::asn1::allocate(sizeof(HashedId3_t)));
-        OCTET_STRING_fromBuf(
-            temp,
-            reinterpret_cast<const char *>(request.data()),
-            request.size()
-        );
-        ASN_SEQUENCE_ADD(
-            &(this->message->content->choice.signedData->tbsData->headerInfo.inlineP2pcdRequest->list),
-            temp
-        );
+        HashedId3_t* id = vanetza::asn1::allocate<HashedId3_t>();
+        OCTET_STRING_fromBuf(id, reinterpret_cast<const char *>(request.data()),
+                             request.size());
+        ASN_SEQUENCE_ADD(&(inline_p2pcd_request->list), id);
     }
 }
 

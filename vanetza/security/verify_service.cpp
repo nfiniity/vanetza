@@ -550,7 +550,7 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
     }
     // verify payload signature with given signature
     ByteBuffer payload = secured_message.convert_for_signing();
-    boost::optional<CertificateVariant> signer;
+    boost::optional<const CertificateV3&> signer;
 
     for (const auto& cert : possible_certificates) {
         // The Subject type disappears on the V1.3.1
@@ -566,7 +566,7 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
 
         ByteBuffer signature_input = calculate_sha_signature_inputV3(payload, certificateV3, *curve_name);
         if (backend.verify_data(*public_key, signature_input, *signature, *curve_name)) {
-            signer = cert;
+            signer = certificateV3;
             confirm.certificate_id = signer_hash;
             break;
         }
@@ -609,10 +609,10 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
     if (!cert_validity) {
         confirm.report = VerificationReport::Invalid_Certificate;
 
-        if (cert_validity.reason() == CertificateInvalidReason::Unknown_Signer && secured_message.is_signer_digest()) {
+        if (cert_validity.reason() == CertificateInvalidReason::Unknown_Signer) {
             confirm.certificate_id = signer_hash;
             if (sign_policy) {
-                sign_policy->request_unrecognized_certificate(signer_hash);
+                sign_policy->request_unrecognized_certificate(signer->get_issuer_identifier());
             }
         }
 
