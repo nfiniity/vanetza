@@ -460,20 +460,28 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
 
                 // first certificate must be the authorization ticket
                 signer_hash = calculate_hash(chain.front());
+
                 if (chain.size() > 3) {
                     // prevent DoS by sending very long chains, maximum length is three certificates, because:
                     // AT → AA → Root and no other signatures are allowed, sending the Root is optional
                     confirm.report = VerificationReport::Invalid_Certificate;
                     return confirm;
+                }
 
-                } else if (sign_policy && chain.size() == 1 &&
-                           confirm.its_aid == aid::CA && cert_cache &&
-                           cert_cache->lookup(signer_hash).empty()) {
+                auto cached_signer = cert_cache
+                                         ? cert_cache->lookup(signer_hash)
+                                         : std::list<CertificateVariant>();
+
+                if (sign_policy && confirm.its_aid == aid::CA && cached_signer.empty()) {
                     // Previously unknown certificate, send own certificate in next CAM
                     // See TS 103 097 v1.2.1, section 7.1, 1st bullet, 3rd dash
                     sign_policy->request_certificate();
+                }
 
-                } else if (certs && cert_cache && chain.size() > 1) {
+                if (!cached_signer.empty()) {
+                    // we have a cached signer, so we can skip the certificate check
+                    possible_certificates_from_cache = true;
+                } else if (chain.size() > 1 && certs && cert_cache) {
                     // pre-check chain certificates, otherwise they're not available for the ticket check
                     // The second certificate will always have to be the AA
                     std::list<CertificateVariant>::iterator it = chain.begin();
@@ -501,6 +509,7 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
                     cert_cache->insert(cert);
                 }
 
+                // add authorization ticket to possible certificates
                 possible_certificates.push_back(chain.front());
                 break;
             }
@@ -510,7 +519,7 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
             }
         }
     }
-    if (possible_certificates.size() == 0) {
+    if (possible_certificates.empty()) {
         confirm.report = VerificationReport::Signer_Certificate_Not_Found;
         confirm.certificate_id = signer_hash;
         if (sign_policy) {
