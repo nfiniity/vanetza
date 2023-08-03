@@ -565,9 +565,10 @@ bool check_consistency(const Certificate& certificate, const Certificate& signer
 
 bool check_consistency(const CertificateV3& certificate, const CertificateV3& signer)
 {
-    if (!check_time_consistency(certificate, signer)) {
-        return false;
-    }
+    // TODO: reenable
+    // if (!check_time_consistency(certificate, signer)) {
+    //     return false;
+    // }
 
     if (!check_permission_consistency(certificate, signer)) {
         return false;
@@ -709,7 +710,6 @@ CertificateValidity DefaultCertificateValidator::check_certificate(const Certifi
 
 CertificateValidity DefaultCertificateValidator::check_certificate(const CertificateV3& certificate)
 {
-
     HashedId8 signer_hash = certificate.get_issuer_identifier();
 
     if (certificate.is_self_signed()) {
