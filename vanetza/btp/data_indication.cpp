@@ -17,6 +17,7 @@ DataIndication::DataIndication(const geonet::DataIndication& ind, const HeaderA&
     destination(ind.destination),
     its_aid(ind.its_aid),
     permissions(ind.permissions),
+    certificate_id(ind.certificate_id),
     source_position(ind.source_position),
     traffic_class(ind.traffic_class),
     remaining_packet_lifetime(ind.remaining_packet_lifetime)
@@ -29,6 +30,7 @@ DataIndication::DataIndication(const geonet::DataIndication& ind, const HeaderB&
     destination(ind.destination),
     its_aid(ind.its_aid),
     permissions(ind.permissions),
+    certificate_id(ind.certificate_id),
     source_position(ind.source_position),
     traffic_class(ind.traffic_class),
     remaining_packet_lifetime(ind.remaining_packet_lifetime)

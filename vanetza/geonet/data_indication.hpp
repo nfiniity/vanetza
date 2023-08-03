@@ -23,7 +23,7 @@ struct DataIndication
     security::DecapReport security_report;
     boost::optional<ItsAid> its_aid;
     boost::optional<ByteBuffer> permissions;
-    // TODO: certificate id is missing (optional)
+    boost::optional<security::HashedId8> certificate_id;
     TrafficClass traffic_class;
     boost::optional<Lifetime> remaining_packet_lifetime;
     boost::optional<unsigned> remaining_hop_limit;

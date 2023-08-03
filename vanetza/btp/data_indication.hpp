@@ -28,6 +28,7 @@ struct DataIndication
     decltype(geonet::DataIndication::destination) destination;
     decltype(geonet::DataIndication::its_aid) its_aid;
     decltype(geonet::DataIndication::permissions) permissions;
+    decltype(geonet::DataIndication::certificate_id) certificate_id;
     geonet::ShortPositionVector source_position;
     geonet::TrafficClass traffic_class;
     boost::optional<geonet::Lifetime> remaining_packet_lifetime;

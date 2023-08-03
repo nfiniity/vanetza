@@ -39,7 +39,7 @@ namespace
 
 struct ControlInfo
 {
-    ControlInfo(const DataRequest request) :
+    ControlInfo(const DataRequest &request) :
         communication_profile(request.communication_profile),
         its_aid(request.its_aid) {}
 
@@ -521,6 +521,7 @@ void Router::indicate_secured(IndicationContextBasic& ctx, const BasicHeader& ba
         ctx.service_primitive().security_report = decap_confirm.report;
         ctx.service_primitive().its_aid = decap_confirm.its_aid;
         ctx.service_primitive().permissions = decap_confirm.permissions;
+        ctx.service_primitive().certificate_id = decap_confirm.certificate_id;
         secured_payload_visitor visitor(*this, ctx, basic);
 
         // check whether the received packet is valid
