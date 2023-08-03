@@ -88,12 +88,21 @@ Group::~Group()
     EC_GROUP_clear_free(group);
 }
 
-Signature::Signature(ECDSA_SIG* sig) : signature(sig)
+size_t digest_size(const std::string& digest_name)
+{
+    const EVP_MD* md = EVP_get_digestbyname(digest_name.c_str());
+    check(md != nullptr);
+    return EVP_MD_get_size(md);
+}
+
+Signature::Signature(ECDSA_SIG *sig, const std::string &digest_name)
+    : signature(sig), element_size(digest_size(digest_name))
 {
     check(signature);
 }
 
-Signature::Signature(const EcdsaSignature& ecdsa) : signature(ECDSA_SIG_new())
+Signature::Signature(const EcdsaSignature &ecdsa, const std::string &digest_name)
+    : signature(ECDSA_SIG_new()), element_size(digest_size(digest_name))
 {
     check(signature);
 
@@ -115,15 +124,20 @@ EcdsaSignature Signature::ecdsa_signature() const
     ECDSA_SIG_get0(signature, &sig_r, &sig_s);
     openssl::check(sig_r && sig_s);
 
-    EcdsaSignature ecdsa_signature;
-    X_Coordinate_Only coordinate;
+    EcdsaSignature ecdsa_signature{
+        .R = X_Coordinate_Only{.x = ByteBuffer(element_size, 0x00)},
+        .s = ByteBuffer(element_size, 0x00)
+    };
 
-    ecdsa_signature.s.resize(BN_num_bytes(sig_s));
-    BN_bn2bin(sig_s, ecdsa_signature.s.data());
+    // OpenSSL removes leading zeros here, so we need to add them back
+    size_t r_padding = element_size - BN_num_bytes(sig_r);
+    assert(r_padding < element_size);
+    ByteBuffer &x = boost::get<X_Coordinate_Only>(ecdsa_signature.R).x;
+    BN_bn2bin(sig_r, x.data() + r_padding);
 
-    coordinate.x.resize(BN_num_bytes(sig_r));
-    BN_bn2bin(sig_r, coordinate.x.data());
-    ecdsa_signature.R = std::move(coordinate);
+    size_t s_padding = element_size - BN_num_bytes(sig_s);
+    assert(s_padding < element_size);
+    BN_bn2bin(sig_s, ecdsa_signature.s.data() + s_padding);
 
     return ecdsa_signature;
 }
@@ -285,14 +299,25 @@ ecdsa256::PublicKey EvpKey::public_key() const
 
 ecdsa256::PrivateKey EvpKey::private_key() const
 {
-    ecdsa256::PrivateKey key;
-    BIGNUM *private_number = nullptr;
+    std::string own_group_name = group_name();
+    int padded_key_size;
+    if (own_group_name == "prime256v1" || own_group_name == "brainpoolP256r1") {
+        padded_key_size = 32;
+    } else if (own_group_name == "brainpoolP384r1") {
+        padded_key_size = 48;
+    } else {
+        throw std::domain_error("Unsupported EC group");
+    }
 
+    BIGNUM *private_number = nullptr;
     check(1 == EVP_PKEY_get_bn_param(evpKey, "priv", &private_number));
-    int key_size = BN_num_bytes(private_number);
-    assert(key_size == 32 || key_size == 48);
-    key.key.resize(key_size);
-    openssl::check(key_size == BN_bn2bin(private_number, key.key.data()));
+
+    // OpenSSL removes leading zeros here, so we need to add them back
+    size_t padding = padded_key_size - BN_num_bytes(private_number);
+    assert(padding < padded_key_size);
+
+    ecdsa256::PrivateKey key{.key = ByteBuffer(padded_key_size, 0x00)};
+    BN_bn2bin(private_number, key.key.data() + padding);
 
     BN_clear_free(private_number);
     return key;

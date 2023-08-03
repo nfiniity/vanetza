@@ -113,19 +113,19 @@ private:
 class Signature : private boost::noncopyable
 {
 public:
-    explicit Signature(ECDSA_SIG* sig);
-    explicit Signature(const EcdsaSignature& sig);
+    explicit Signature(ECDSA_SIG* sig, const std::string &digest_name);
+    explicit Signature(const EcdsaSignature& sig, const std::string &digest_name);
     ~Signature();
 
     EcdsaSignature ecdsa_signature() const;
 
     operator const ECDSA_SIG*() { return signature; }
     const ECDSA_SIG* operator->() const { return signature; }
-    ECDSA_SIG* operator->() { return signature; }
     operator bool() { return signature != nullptr; }
 
 private:
     ECDSA_SIG* signature;
+    size_t element_size;
 };
 
 

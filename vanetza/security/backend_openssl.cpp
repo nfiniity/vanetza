@@ -59,7 +59,7 @@ EcdsaSignature BackendOpenSsl::sign_data(const ecdsa256::PrivateKey &key,
     const unsigned char *sig_ptr = sig_buf.data();
     ECDSA_SIG *ecdsa_sig = d2i_ECDSA_SIG(nullptr, &sig_ptr, sig_len);
     openssl::check(ecdsa_sig != nullptr);
-    return openssl::Signature(ecdsa_sig).ecdsa_signature();
+    return openssl::Signature(ecdsa_sig, digest_name).ecdsa_signature();
 }
 
 EciesEncryptionResult BackendOpenSsl::encrypt_data(
@@ -133,7 +133,7 @@ bool BackendOpenSsl::verify_data(const ecdsa256::PublicKey &key,
                    1 == EVP_DigestVerifyInit_ex(ctx, nullptr, digest_name.data(), nullptr, nullptr, pub_key, nullptr));
 
     // Convert signature to ASN.1 format
-    openssl::Signature asn1_sig(sig);
+    openssl::Signature asn1_sig(sig, digest_name);
     unsigned char *asn1_sig_encoded = nullptr;
     int asn1_sig_encoded_len = i2d_ECDSA_SIG(asn1_sig, &asn1_sig_encoded);
     openssl::check(asn1_sig_encoded_len > 0);
