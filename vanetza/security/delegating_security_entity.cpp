@@ -41,7 +41,7 @@ DecapConfirm DelegatingSecurityEntity::decapsulate_packet(DecapRequest&& decap_r
 
             PacketVariant operator()(const SecuredMessageV3& message) const
             {
-                return CohesivePacket(message.get_payload(), OsiLayer::Session);
+                return CohesivePacket(message.get_payload(), OsiLayer::Network);
             }
 
         };
