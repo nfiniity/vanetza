@@ -75,7 +75,8 @@ void CertificateCache::insert_v3(const CertificateV3& certificate)
         }
     }
 
-    Clock::duration lifetime = certificate.get_validity_duration();
+    constexpr Clock::duration max = std::chrono::hours(1);
+    Clock::duration lifetime = std::min(certificate.get_validity_duration(), max);
 
     if (lifetime > Clock::duration::zero()) {
         CachedCertificate entry;
