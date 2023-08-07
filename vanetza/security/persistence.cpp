@@ -8,6 +8,12 @@
 #include <streambuf>
 #include <fstream>
 
+#if (CRYPTOPP_VERSION >= 600) && (__cplusplus >= 201103L)
+    using byte = CryptoPP::byte;
+#else
+    typedef unsigned char byte;
+#endif
+
 namespace vanetza
 {
 namespace security
@@ -70,7 +76,8 @@ ecdsa256::KeyPair load_private_key_from_file_v3(const std::string& key_path)
     CryptoPP::Base64Decoder decoder;
 
     decoder.Attach(new CryptoPP::Redirector(queue));
-    decoder.Put((const CryptoPP::byte*)keystr.data(), keystr.length());
+    const byte *keystr_ptr = (const byte *)keystr.data();
+    decoder.Put(keystr_ptr, keystr.length());
     decoder.MessageEnd();
 
 

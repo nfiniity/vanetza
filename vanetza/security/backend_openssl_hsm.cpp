@@ -16,13 +16,8 @@ namespace security
 
 BackendOpenSslHsm::BackendOpenSslHsm()
 {
-#if OPENSSL_API_COMPAT < 0x10100000L
-    ERR_load_crypto_strings();
-    OPENSSL_config(NULL);
-#else
     // TODO: Test this
     OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS | OPENSSL_INIT_LOAD_CONFIG, nullptr);
-#endif
 }
 
 } // namespace security
