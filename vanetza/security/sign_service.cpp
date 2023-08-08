@@ -113,7 +113,7 @@ SignService straight_sign_serviceV3(CertificateProvider& certificate_provider, B
 
         ByteBuffer data_buffer = secured_message.convert_for_signing();
         const CertificateV3& certificate = boost::get<CertificateV3>(certificate_provider.own_certificate());
-        const std::string& curve_name = *certificate.get_public_key_curve_name();
+        std::string curve_name = certificate.get_public_key_curve_name().get();
         ByteBuffer signature_input = calculate_sha_signature_inputV3(data_buffer, certificate, curve_name);
         Signature signature = backend.sign_data(private_key, signature_input, curve_name);
 
@@ -140,7 +140,7 @@ SignService deferred_sign_serviceV3(CertificateProvider& certificate_provider, B
         }
 
         const CertificateV3& certificate = boost::get<CertificateV3>(certificate_provider.own_certificate());
-        const std::string& curve_name = *certificate.get_public_key_curve_name();
+        const std::string curve_name = *certificate.get_public_key_curve_name();
 
         static const Signature placeholder = signature_placeholder();
         static const size_t signature_size = get_size(placeholder);
