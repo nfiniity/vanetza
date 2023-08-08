@@ -527,11 +527,10 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
         }
         return confirm;
     }
-    // TODO: reenable
-    // if (!check_generation_time(secured_message, rt.now())) {
-    //     confirm.report = VerificationReport::Invalid_Timestamp;
-    //     return confirm;
-    // }
+    if (!check_generation_time(secured_message, rt.now())) {
+        confirm.report = VerificationReport::Invalid_Timestamp;
+        return confirm;
+    }
     // TODO check Duplicate_Message, Invalid_Mobility_Data, Unencrypted_Message, Decryption_Error
 
     // check signature
@@ -617,12 +616,11 @@ VerifyConfirm verify_v3(const VerifyRequest &request,
         return confirm;
     }
 
-    // TODO: reenable
-    // if (!check_certificate_time(*signer, rt.now())) {
-    //     confirm.report = VerificationReport::Invalid_Certificate;
-    //     confirm.certificate_validity = CertificateInvalidReason::Off_Time_Period;
-    //     return confirm;
-    // }
+    if (!check_certificate_time(*signer, rt.now())) {
+        confirm.report = VerificationReport::Invalid_Certificate;
+        confirm.certificate_validity = CertificateInvalidReason::Off_Time_Period;
+        return confirm;
+    }
 
     if (positioning && !check_certificate_region(*signer, positioning->position_fix())) {
         confirm.report = VerificationReport::Invalid_Certificate;
