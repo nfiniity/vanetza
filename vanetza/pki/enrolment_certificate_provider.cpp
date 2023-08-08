@@ -169,26 +169,6 @@ boost::optional<security::CertificateV3> EnrolmentCertificateProvider::run_enrol
         return boost::none;
     }
 
-    // TODO: remove
-    // Backup enrolment response
-    std::ofstream enrolment_response_file(
-        "/home/dankeroni/ectl_trust_store/enrolment_bak/ec_response.oer",
-        std::ios::out | std::ios::binary);
-    enrolment_response_file.write(
-        reinterpret_cast<const char *>(enrolment_response->data()),
-        enrolment_response->size());
-    enrolment_response_file.close();
-
-    // TODO: remove
-    // Save session key
-    std::ofstream session_key_file(
-        "/home/dankeroni/ectl_trust_store/enrolment_bak/session_key.bin",
-        std::ios::out | std::ios::binary);
-    session_key_file.write(
-        reinterpret_cast<const char *>(enrolment_request.session_key.data()),
-        enrolment_request.session_key.size());
-    session_key_file.close();
-
     return decode_ec_response(*enrolment_response, enrolment_request.session_key,
                               ea_certificate.certificate, backend, runtime);
 }
