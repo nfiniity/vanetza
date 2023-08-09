@@ -8,7 +8,10 @@
 #include <vanetza/security/sign_header_policy.hpp>
 #include <vanetza/security/static_certificate_provider.hpp>
 #include <vanetza/security/trust_store.hpp>
+#include <vanetza/pki/ectl_security_entity.hpp>
 #include <stdexcept>
+#include <iostream>
+#include <boost/algorithm/hex.hpp>
 
 using namespace vanetza;
 namespace po = boost::program_options;
@@ -163,7 +166,7 @@ create_security_entity_v3(const po::variables_map& vm, const Runtime& runtime, P
 
             security::CertificateVariant authorization_ticket = security::load_certificate_from_file_v3(certificate_path);
             auto authorization_ticket_key = security::load_private_key_from_file_v3(certificate_key_path);
-            
+
             std::list<security::CertificateVariant> chain;
 
             if (vm.count("certificate-chain")) {
@@ -199,6 +202,33 @@ create_security_entity_v3(const po::variables_map& vm, const Runtime& runtime, P
         throw std::runtime_error("Unknown security entity requested");
     }
     return security;
+}
+
+std::unique_ptr<security::SecurityEntity>
+create_ectl_security_entity(Runtime& runtime, PositionProvider& positioning)
+{
+    // Optional
+    std::string canonical_id = "my_canonical_id";
+
+    auto rca_id = pki::hashed_id_from_hex_string("87E580DD2B0D47FF");
+    auto ea_id = pki::hashed_id_from_hex_string("09A5502313325F12");
+    auto aa_id = pki::hashed_id_from_hex_string("FEA15FE836E3E53F");
+
+    uint8_t num_authorization_tickets = 100;
+
+    // ID change callback, this is where you would also switch the access level address
+    security::IdChangeCallback id_change_callback = [](const security::HashedId8& id) {
+        std::string id_hex;
+        boost::algorithm::hex(id, std::back_inserter(id_hex));
+        std::cout << "ID changed to: " << id_hex << std::endl;
+    };
+
+    std::string trust_store_path = "/home/user/station_0001_trust_store/";
+
+    return std::make_unique<pki::EctlSecurityEntity>(
+        runtime, positioning, trust_store_path, rca_id,
+        ea_id, aa_id, num_authorization_tickets, std::move(id_change_callback),
+        pki::psid_ssp_list_example_xml(), canonical_id);
 }
 
 std::unique_ptr<security::SecurityEntity>

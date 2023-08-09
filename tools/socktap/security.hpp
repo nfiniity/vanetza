@@ -11,6 +11,9 @@
 std::unique_ptr<vanetza::security::SecurityEntity>
 create_security_entity(const boost::program_options::variables_map&, const vanetza::Runtime&, vanetza::PositionProvider&);
 
+std::unique_ptr<vanetza::security::SecurityEntity>
+create_ectl_security_entity(vanetza::Runtime &runtime, vanetza::PositionProvider &positioning);
+
 void add_security_options(boost::program_options::options_description&);
 
 #endif /* SECURITY_HPP_FV13ZIYA */

@@ -118,8 +118,10 @@ int main(int argc, const char** argv)
         }
 
         auto security = create_security_entity(vm, trigger.runtime(), *positioning);
+        // auto security = create_ectl_security_entity(trigger.runtime(), *positioning);
         if (security) {
             mib.itsGnSecurity = true;
+            mib.itsGnLocalAddrConfMethod = geonet::AddrConfMethod::Auto;
         }
 
         RouterContext context(mib, trigger, *positioning, security.get());
